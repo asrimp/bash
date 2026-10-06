@@ -1,0 +1,85 @@
+GLOB = pola file yang di-expand sama bash SEBELUM perintah jalan
+Beda sama regex! glob buat file, regex buat isi file
+
+BASIC:
+* -> semua karakter, kecuali hidden. ex: *.txt
+? -> satu karakter. ex: file?.txt = file1.txt fileA.txt
+[abc] -> satu dari a,b,c. ex: file[12].txt
+[a-z] -> range. ex: [a-z]*.log
+[!abc] atau [^abc] -> bukan a,b,c. ex: [!0-9]* = gak diawali angka
+*.{jpg,png} -> semua jpg dan png (pakai brace)
+
+BRACE EXPANSION (bukan glob, tapi mirip, urutan eksekusi lebih dulu):
+{a,b,c} -> a b c
+file{1..3}.txt -> file1.txt file2.txt file3.txt
+file{a..c}.txt -> filea.txt fileb.txt filec.txt
+{1..10..2} -> 1 3 5 7 9
+a{1,2}b{3,4} -> a1b3 a1b4 a2b3 a2b4
+mkdir -p project/{src,dist,tests}
+touch file{1..100}.log
+
+DOTFILES (hidden):
+* -> gak include file.hidden
+.* -> include hidden tapi juga. dan.. (bahaya rm)
+shopt -s dotglob-> baru * include hidden
+ls -d.* -> list hidden aja, -d biar gak masuk isinya
+
+RECURSIVE ** :
+shopt -s globstar
+** -> semua file & folder recursive
+**/*.txt -> semua.txt di semua subfolder
+**/ -> cuma folder recursive
+ls **/*.log
+
+EXTGLOB (powerful):
+shopt -s extglob
+?(pat) -> 0 atau 1 kali pat
+*(pat) -> 0 atau lebih pat
++(pat) -> 1 atau lebih pat
+@(pat1|pat2) -> salah satu dari pat
+!(pat) -> bukan pat
+
+Contoh extglob:
+ls!(*.tmp) -> semua kecuali.tmp
+ls @(*.jpg|*.png) -> jpg atau png
+ls!(*.bak|*.log)
+rm!(*.sh) -> hapus semua kecuali.sh (hati-hati)
+
+SHOPT PENTING BUAT GLOB:
+shopt -s nullglob -> kalau gak ada yang match, hasil kosong (bukan string "*.txt")
+shopt -s failglob -> kalau gak match, error (aman buat script)
+shopt -s dotglob -> * include hidden
+shopt -s nocaseglob -> * gak peduli besar kecil
+shopt -s globstar -> aktifin **
+shopt -> lihat semua status
+shopt -s extglob nullglob globstar -> biasanya diaktifkan bareng
+
+AMAN vs BAHAYA:
+ls *.txt -> aman cek dulu
+rm *.txt -> hapus semua txt di folder ini
+rm./* -> lebih aman dari rm * kalau ada file namanya -rf
+for f in *.txt; do [[ -e "$f" ]] || continue; echo "$f"; done -> loop aman kalau nullglob off
+echo *.txt -> debug lihat expand jadi apa
+printf "%s\n" *.txt -> debug per baris, aman kalau nama ada spasi
+
+GLOB + QUOTE:
+"*.txt" -> gak di-expand, jadi string "*.txt"
+'*.txt' -> gak di-expand
+*.txt -> di-expand
+"$var"/*.txt -> var gak di-glob, tapi *.txt di-glob
+
+GLOB vs FIND:
+glob cepat buat folder ini, find buat recursive + filter permission/time
+find. -name "*.log" -> mirip **/*.log tapi lebih aman file banyak
+find. -name "*.tmp" -delete
+
+TRIK FILE DENGAN GLOB:
+cp *.txt backup/ -> copy semua txt
+mv *.jpg images/ -> pindah
+ls -l *.{sh,py} -> list sh dan py
+touch {a,b,c}.txt -> bikin a.txt b.txt c.txt
+ls -d */ -> cuma folder
+ls -d */ | wc -l -> hitung jumlah folder
+rm -i *.bak -> hapus dengan konfirmasi per file
+ls -lh [A-Z]* -> file diawali huruf besar
+ls -lh [!a-z]* -> file diawali bukan huruf kecil

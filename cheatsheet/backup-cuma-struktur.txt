@@ -1,0 +1,2 @@
+mariadb-dump -u root -p --no-data toko > struktur.sql
+

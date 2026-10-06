@@ -1,0 +1,90 @@
+ctrl+a awal baris
+ctrl+e akhir baris
+ctrl+r search history
+
+FITUR BASH LENGKAP (yang gak ada di sh biasa):
+
+1. BUILTIN & PERINTAH DASAR:
+compgen -b -> list semua builtin: echo, cd, alias, type, help, history, jobs, etc
+type ls -> cek apakah alias/builtin/file
+help cd -> help khusus builtin (lebih cepet dari man)
+man bash -> kitab suci 6000 baris
+
+2. EKSPANSI (yang jalan SEBELUM perintah dieksekusi, urutannya penting):
+{a,b,c} -> brace expansion: a b c
+~/ -> tilde expansion: /home/ershad
+$var, ${var:-default} -> parameter expansion
+$(cmd) -> command substitution
+$((1+2)) -> arithmetic expansion
+*? [abc] -> pathname expansion / glob
+echo {1..10} $HOME $(date) *.txt -> semua di-expand sekaligus
+
+3. QUOTING:
+" " -> double quote, variabel expand tapi glob gak
+' ' -> single quote, semua literal
+\ -> escape 1 karakter
+$' ' -> bisa pakai \n \t
+
+4. REDIRECT & PIPE & SYMBOL:
+> >> < 2> &> 2>&1 | |& <<< << <() >() tee
+Ini yang kemarin di # symbol
+
+5. VARIABEL & TIPE DATA:
+var=isi -> tanpa spasi!
+$HOME $PATH $USER $PWD $?
+array: arr=(a b c); echo ${arr[0]}; ${arr[@]}
+assoc: declare -A map; map[key]=val; echo ${map[key]}
+export var -> jadi environment variable buat anak proses
+declare -i num=10 -> integer
+declare -r const=1 -> readonly
+declare -l lower -> auto lowercase
+
+6. KONTROL ALUR:
+if [[ -f file ]]; then echo ada; fi
+[[ ]] -> test modern (lebih aman dari [ ])
+(( )) -> test angka: if (( a > 10 ))
+case $var in a) echo a;; b) echo b;; esac
+for f in *.txt; do echo $f; done
+for ((i=0;i<10;i++)); do echo $i; done
+while read line; do echo $line; done < file
+until false; do...; done
+select opt in a b c; do echo $opt; break; done -> bikin menu
+
+7. FUNGSI & ALIAS & MODULAR:
+alias ll='ls -lh'
+function hi() { echo "hi $1"; }
+hi ershad
+return vs exit, local var di dalam fungsi
+
+8. FITUR INTERAKTIF (kamu baru di sini):
+history -> panah atas/bawah, Ctrl+R reverse search,!123,!!,!$
+readline: Ctrl+A awal baris, Ctrl+E akhir, Ctrl+U hapus, Alt+. argumen terakhir
+shopt -s autocd cdspell direxpand histverify
+complete -F _func cmd -> autocomplete yang kamu bikin
+compgen -W "a b c" -- "$cur"
+COMPREPLY array
+PS1 -> custom prompt warna-warni
+
+9. JOB CONTROL & SINYAL:
+cmd & -> background
+jobs, fg, bg, Ctrl+Z pause, Ctrl+C kill
+wait, disown, nohup cmd &
+trap 'echo kena Ctrl+C' INT -> tangkap sinyal
+trap 'rm /tmp/tmpfile' EXIT -> cleanup pas keluar
+
+10. OPSI & DEBUGGING & KONFIG:
+set -e -> exit kalau error
+set -u -> error kalau variabel belum ada
+set -x -> debug print tiap perintah (paling berguna)
+set -o pipefail -> pipe dianggap gagal kalau salah satu gagal
+shopt -> on/off fitur bash (globstar, extglob, nullglob, dotglob)
+Startup: /etc/profile -> ~/.bash_profile -> ~/.bashrc -> /etc/bash.bashrc
+.bashrc buat interaktif,.bash_profile buat login
+
+11. ADVANCE YANG JARANG DIAJARIN:
+mapfile -t arr < file -> baca file jadi array
+read -p "nama: " name
+coproc -> jalanin 2 proses ngobrol
+[[ $var =~ regex ]] -> regex di bash
+getopts -> parse argumen -a -b value
+enable -n echo -> matiin builtin

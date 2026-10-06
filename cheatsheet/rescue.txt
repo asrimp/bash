@@ -1,0 +1,196 @@
+# rescue - emergency checklist pas server panik
+
+=== 0. JANGAN PANIK, JANGAN ASAL REBOOT ===
+# 1. Cek dulu: apa yang error? copy error message
+# 2. Backup dulu sebelum benerin: cp file file.bak.$(date +%F_%H%M)
+# 3. Cek log: journalctl -xeu service -n 50, tail -f /var/log/nginx/error.log
+
+=== 1. DISK PENUH 100% - GAK BISA NULIS, DOCKER/NGINX MATI ===
+df -h && df -i
+# IUse% 100% = inode abis (kebanyakan file kecil), Use% 100% = disk abis
+
+# langkah cepat selamat (urut):
+sudo du -sh /* 2>/dev/null | sort -hr | head -n 20
+sudo du -sh /var/* 2>/dev/null | sort -hr | head -n 20
+sudo du -sh /var/log/* | sort -hr | head
+sudo du -sh /home/* 2>/dev/null | sort -hr | head
+
+# kosongin tanpa hapus file (biar service gak bingung):
+sudo truncate -s 0 /var/log/nginx/error.log
+sudo truncate -s 0 /var/log/nginx/access.log
+sudo truncate -s 0 /var/log/syslog
+sudo journalctl --vacuum-size=100M
+sudo journalctl --vacuum-time=3d
+
+# docker biang kerok:
+docker system df
+docker system prune -f
+docker image prune -a -f --filter "until=72h"
+sudo du -sh /var/lib/docker/containers/*/*-json.log | sort -hr | head
+# set biar gak kejadian lagi di /etc/docker/daemon.json:
+# {"log-driver":"json-file","log-opts":{"max-size":"10m","max-file":"3"}}
+
+# inode penuh (jutaan file kecil di cache/session):
+sudo find /var/www -type f -name "sess_*" | wc -l
+sudo find /tmp -type f -atime +3 -delete
+sudo find /var/www/app/storage/framework/sessions -type f -mtime +1 -delete
+
+# cek file gede ngumpet:
+sudo find / -type f -size +500M 2>/dev/null | xargs ls -lh 2>/dev/null | head
+
+=== 2. FSTAB SALAH - SERVER GAK BISA BOOT, MASUK EMERGENCY MODE ===
+# gejala: boot stuck, minta root password, "Entering emergency mode"
+
+# di console emergency:
+mount -o remount,rw /
+cat /etc/fstab
+# comment baris yang baru kamu tambah pakai # 
+nano /etc/fstab
+# atau restore backup:
+cp /etc/fstab.bak.2024-01-01 /etc/fstab
+findmnt --verify
+mount -a
+reboot
+
+# cara aman edit fstab biar gak kejadian lagi:
+sudo cp /etc/fstab /etc/fstab.bak.$(date +%F)
+sudo blkid # pakai UUID jangan /dev/sdb1
+# tambahin nofail,x-systemd.device-timeout=30
+# UUID=xxx /mnt/data ext4 defaults,nofail,x-systemd.device-timeout=30 0 2
+sudo findmnt --verify && sudo mount -a
+
+=== 3. SALAH CHMOD / CHOWN - PERMISSION 777 ATAU CHOWN ROOT SEMUA ===
+# gejala: 403 Forbidden, .env kebaca orang, ssh minta password terus
+
+# cek dulu:
+ls -l /var/www/app/.env
+namei -l /var/www/app/.env
+
+# balikin standar web:
+sudo chown -R ershad:www-data /var/www/app
+sudo find /var/www/app -type d -exec chmod 775 {} \;
+sudo find /var/www/app -type f -exec chmod 664 {} \;
+sudo chmod 600 /var/www/app/.env
+sudo chmod 700 ~/.ssh && chmod 600 ~/.ssh/authorized_keys && chmod 600 ~/.ssh/id_rsa
+
+# kalau terlanjur chmod -R 777 / :
+# JANGAN reboot! Backup dulu list permission:
+# Ini fatal, paling aman reinstall atau restore dari backup
+# emergency fix minimal:
+sudo chmod 755 / && sudo chmod 755 /etc /var /home
+sudo chmod 600 /etc/shadow && sudo chmod 644 /etc/passwd
+
+# kalau chown -R ershad /etc :
+sudo chown -R root:root /etc
+sudo chown -R root:shadow /etc/shadow /etc/gshadow && sudo chmod 640 /etc/shadow
+
+=== 4. SALAH RM -RF - HAPUS FILE/FOLDER PENTING ===
+# rm -rf ~/dotfiles, rm -rf /var/www/app
+
+# STOP, jangan nulis apapun lagi di disk itu biar bisa recovery
+# cek trash:
+trash-list | grep file-yang-dihapus
+trash-restore
+
+# kalau ada backup:
+ls -la /tmp/archive/ ~/backup/
+git status # kalau project, git bisa restore file yang ke-track
+git checkout -- file-yang-kehapus
+git reflog # kalau commit kehapus
+
+# kalau bener2 hilang & gak ada backup: extundelete (ext4, harus unmount)
+sudo apt install extundelete
+sudo umount /dev/sda1
+sudo extundelete /dev/sda1 --restore-all
+
+# pelajaran: pakai alias rm='trash-put' di ~/.bashrc
+# alias rm='echo "pakai trash-put bro!" && false'
+
+=== 5. UFW / NGINX BIKIN KE-LOCK SSH ===
+# gejala: ssh gak bisa connect setelah ufw enable
+
+# kalau masih ada akses console (VNC di provider):
+sudo ufw allow 22/tcp
+sudo ufw allow 80,443/tcp
+sudo ufw --force reset
+sudo ufw allow 22/tcp && sudo ufw enable
+
+# nginx down setelah reload:
+sudo nginx -t
+sudo cat /etc/nginx/sites-enabled/app.conf | grep -n ";"
+sudo tail -n 50 /var/log/nginx/error.log
+sudo rm /etc/nginx/sites-enabled/config-yang-baru && sudo nginx -t && sudo systemctl reload nginx
+# rollback:
+sudo cp /etc/nginx/sites-available/app.conf.bak.2024-01-01 /etc/nginx/sites-available/app.conf
+sudo nginx -t && sudo systemctl reload nginx
+
+=== 6. DOCKER BIKIN DISK PENUH / CONTAINER GAK START ===
+docker ps -a | grep -E "Exited|Restarting"
+docker logs --tail 100 api
+docker inspect api | jq '.State.Error'
+
+# restart loop:
+docker rm -f api
+docker compose up -d --build api
+docker compose logs -f api
+
+# gak bisa build karena no space:
+df -h
+docker builder prune -f
+docker system prune -f
+
+=== 7. SYSTEMD FAILED - SERVICE GAK MAU START ===
+systemctl status app-ershad
+journalctl -u app-ershad -n 100 --no-pager
+journalctl -xeu app-ershad
+
+# fix urutan:
+sudo systemctl daemon-reload
+sudo systemctl reset-failed app-ershad
+sudo systemctl restart app-ershad
+journalctl -u app-ershad -f
+
+# cek salah user/permission di service file:
+sudo cat /etc/systemd/system/app-ershad.service | grep -E "User|ExecStart|WorkingDirectory"
+ls -l $(grep ExecStart /etc/systemd/system/app-ershad.service | awk '{print $1}' | cut -d= -f2 | awk '{print $1}')
+
+=== 8. LOAD TINGGI / OOM / SERVER LEMOT ===
+uptime && free -h && df -h
+top -o %CPU # tekan M buat sort RAM, q quit
+htop # lebih enak
+ps aux --sort=-%cpu | head -n 20
+ps aux --sort=-%mem | head -n 20
+
+# OOM killer bunuh proses:
+dmesg | grep -i "out of memory\|killed process" | tail
+sudo tail -n 50 /var/log/kern.log | grep -i oom
+
+# matiin yang makan RAM:
+docker stats --no-stream --format "table {{.Name}}\t{{.MemUsage}}" | sort -k2 -hr
+sudo systemctl restart service-yang-gede
+# tambah swap darurat:
+sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
+
+=== 9. LUPA PASSWORD / GAK BISA SUDO ===
+# kalau masih bisa login user biasa tapi lupa password:
+sudo -i # kalau sudo masih bisa tanpa password
+passwd # ganti password sendiri
+
+# kalau bener2 lupa root & gak bisa sudo, butuh console recovery provider:
+# reboot -> grub -> Advanced -> recovery -> root shell -> mount -o remount,rw / -> passwd ershad
+
+=== 10. TEMPLATE LAPORAN PAS MINTA BANTUAN ===
+# copy-paste ini biar orang bisa bantu cepat:
+echo "=== df -h ===" && df -h
+echo "=== df -i ===" && df -i
+echo "=== lsblk -f ===" && lsblk -f
+echo "=== systemctl --failed ===" && systemctl --failed
+echo "=== ss -tulpn ===" && ss -tulpn | head -n 30
+echo "=== free -h ===" && free -h
+echo "=== journalctl last 50 ===" && journalctl -n 50 --no-pager
+
+BACKUP DARURAT SEBELUM NGAPA2IN:
+sudo cp /etc/fstab /etc/fstab.bak.$(date +%F_%H%M)
+sudo cp /etc/nginx/nginx.conf /etc/nginx/nginx.conf.bak.$(date +%F_%H%M)
+cp ~/dotfiles/.bashrc ~/dotfiles/.bashrc.bak.$(date +%F_%H%M)
+docker compose exec db pg_dump -U ershad mydb | gzip > ~/backup-$(date +%F_%H%M).sql.gz

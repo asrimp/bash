@@ -1,0 +1,125 @@
+# network - cek IP, port, DNS, firewall, koneksi
+
+IP & INTERFACE (pengganti ifconfig):
+ip a -> lihat semua IP & interface (eth0, lo, docker0)
+ip -c -br a -> versi pendek warna
+ip r -> routing table, gateway kemana
+ip r get 8.8.8.8 -> keluar lewat interface apa
+ip neigh -> arp, lihat IP tetangga / MAC
+sudo ip link set eth0 down / up -> matiin nyalain interface
+sudo ip addr add 192.168.1.10/24 dev eth0 -> tambah IP sementara
+hostname -I -> IP private doang
+curl -s ifconfig.me && echo -> IP public
+
+# di Ubuntu 22/24 pakai netplan, bukan /etc/network/interfaces
+cat /etc/netplan/*.yaml
+sudo netplan try -> test config baru, auto rollback 2 menit kalau salah (WAJIB!)
+sudo netplan apply
+
+PORT & KONEKSI (siapa pakai port 3000?):
+ss -tulpn -> -t tcp -u udp -l listening -p nama proses -n numeric (pengganti netstat, PALING WAJIB HAFAL)
+ss -tulpn | grep 3000 -> cek port 3000 dipake siapa
+ss -tulpn | grep :80
+lsof -i :3000 -> alternatif ss, lebih detail PID
+lsof -i :80 -i :443
+sudo netstat -tulpn | grep LISTEN -> versi lama, masih ada di banyak server
+sudo lsof -i TCP -sTCP:LISTEN
+
+PING & TRACE:
+ping 8.8.8.8
+ping -c 3 1.1.1.1
+ping -i 0.2 192.168.1.1 -> ping cepat
+mtr 8.8.8.8 -> ping + traceroute live, paling enak buat cek putus dimana
+mtr --report -c 10 8.8.8.8 -> laporan 10x
+traceroute 8.8.8.8
+tracepath 8.8.8.8 -> gak butuh root
+sudo traceroute -I 8.8.8.8 -> pakai ICMP kayak ping
+
+DNS (kenapa domain gak resolve?):
+cat /etc/resolv.conf -> DNS yang kepakai sekarang
+systemd-resolve --status / resolvectl status -> Ubuntu 22+ pakai ini
+dig google.com +short -> IP doang
+dig google.com +noall +answer -> detail answer
+dig @8.8.8.8 google.com -> paksa DNS 8.8.8.8
+dig -x 8.8.8.8 +short -> reverse IP jadi nama
+host google.com
+nslookup google.com
+getent hosts google.com
+# flush DNS cache ubuntu:
+sudo resolvectl flush-caches
+
+CEK KONEKSI & HTTP (tanpa curl ribet):
+nc -zv 127.0.0.1 3000 -> cek port kebuka gak, -z scan, -v verbose (paling cepat debug 502)
+nc -zv google.com 443
+telnet 127.0.0.1 3000 -> coba konek manual
+curl -v http://127.0.0.1:3000/ -> cek bypass nginx
+curl -I https://ershad.my.id -> cek header + redirect
+wget --spider -S https://ershad.my.id 2>&1 | grep -E "HTTP|Location"
+
+FIREWALL - UFW (Ubuntu Firewall):
+sudo ufw status verbose
+sudo ufw status numbered
+sudo ufw allow 22/tcp -> allow SSH (lakukan ini dulu sebelum enable biar gak ke-lock!)
+sudo ufw allow 80,443/tcp
+sudo ufw allow from 192.168.1.0/24
+sudo ufw allow 3000/tcp
+sudo ufw deny 23
+sudo ufw delete 2 -> hapus rule nomor 2
+sudo ufw enable -> aktifin (hati2 pas remote!)
+sudo ufw disable
+sudo ufw reload
+sudo ufw --force reset -> reset total
+
+FIREWALL - IPTABLES (kalau gak ada ufw):
+sudo iptables -L -n -v --line-numbers
+sudo iptables -A INPUT -p tcp --dport 22 -j ACCEPT
+sudo iptables -D INPUT 1 -> hapus rule nomor 1
+sudo iptables -F -> flush semua (bahaya! bisa ke-lock)
+# simpan: sudo netfilter-persistent save
+
+CEK BANDWIDTH & SPEED:
+nload -> live traffic per interface (apt install nload)
+iftop -i eth0 -> siapa makan bandwidth (sudo apt install iftop)
+sudo apt install speedtest-cli -y && speedtest-cli --simple
+iperf3 -s -> jadi server di server A
+iperf3 -c IP_SERVER_A -> test speed dari server B ke A
+
+RESEP DEBUG YANG PALING SERING:
+
+# 1. App Node jalan tapi gak bisa diakses dari luar -> port gak LISTEN di 0.0.0.0
+ss -tulpn | grep 3000
+# kalau keliatan 127.0.0.1:3000 = cuma localhost, ganti di app jadi 0.0.0.0:3000
+# kalau keliatan 0.0.0.0:3000 = udah bener, cek firewall
+sudo ufw allow 3000/tcp
+
+# 2. Nginx 502 Bad Gateway
+ss -tulpn | grep 3000 -> app hidup gak?
+curl -v http://127.0.0.1:3000/ -> app bales gak?
+sudo tail -f /var/log/nginx/error.log
+nc -zv 127.0.0.1 3000
+
+# 3. Domain gak resolve / SSL certbot gagal
+dig ershad.my.id +short
+dig @1.1.1.1 ershad.my.id
+cat /etc/resolv.conf
+sudo resolvectl flush-caches
+ping ershad.my.id
+
+# 4. SSH lemot / gak bisa connect
+sudo tail -f /var/log/auth.log | grep sshd
+sudo ufw status | grep 22
+mtr --report -c 10 IP_SERVER
+
+# 5. Cek semua port kebuka dari luar (kayak nmap simpel)
+for p in 22 80 443 3000 5432; do nc -zv -w1 ershad.my.id $p; done
+
+# 6. WSL gak bisa konek ke service Windows / sebaliknya
+# di WSL:
+cat /etc/resolv.conf | grep nameserver -> IP host Windows
+ip r | grep default -> gateway WSL
+
+TIPS:
+- Urutan debug: ip a (IP ada?) -> ip r (gateway ada?) -> ping 8.8.8.8 (internet?) -> dig google.com (DNS?) -> ss -tulpn (app listen?) -> ufw status (firewall?) -> curl -v 127.0.0.1:port
+- ss -tulpn itu kunci kerajaan, hafal itu dulu baru yang lain
+- Di WSL, kalau port gak bisa diakses dari Windows, cek app harus listen 0.0.0.0 bukan 127.0.0.1
+- Selalu sudo ufw allow 22/tcp SEBELUM sudo ufw enable, kalau enggak ke-lock gak bisa SSH balik

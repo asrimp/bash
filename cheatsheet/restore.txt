@@ -1,0 +1,3 @@
+mariadb -u root -p toko < toko.sql
+mariadb -u root -p < all.sql
+

@@ -1,0 +1,179 @@
+# mysql / mariadb - query lapangan
+
+LOGIN & KONEK:
+mysql -u root -p -> login root pakai password
+mysql -u ershad -p -h 127.0.0.1 -P 3306 mydb -> -h host -P port -D database
+mysql -u ershad -p -e "SHOW DATABASES;" -> -e jalanin 1 query langsung tanpa masuk shell
+sudo mysql -u root -> di Ubuntu mariadb root pakai unix_socket, jadi harus sudo tanpa -p
+# di docker:
+docker compose exec db mysql -u ershad -p mydb
+docker compose exec db mysql -u root -p -e "SHOW DATABASES;"
+# cek siapa yang login:
+SELECT USER(), CURRENT_USER();
+
+DATABASE & TABLE:
+SHOW DATABASES;
+CREATE DATABASE mydb CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+DROP DATABASE mydb; -- hati2!
+USE mydb;
+SHOW TABLES;
+SHOW TABLES LIKE '%user%';
+SHOW CREATE TABLE users\G -> \G biar vertikal enak dibaca
+DESCRIBE users; / DESC users;
+SHOW COLUMNS FROM users;
+SHOW INDEX FROM users;
+SHOW TABLE STATUS LIKE 'users'\G -> lihat size, engine, row
+
+USER & GRANT (jangan pakai root buat app!):
+CREATE USER 'ershad'@'%' IDENTIFIED BY 'password_kuat';
+CREATE USER 'ershad'@'127.0.0.1' IDENTIFIED BY 'xxx';
+GRANT ALL PRIVILEGES ON mydb.* TO 'ershad'@'%';
+GRANT SELECT, INSERT, UPDATE, DELETE ON mydb.* TO 'app'@'%';
+FLUSH PRIVILEGES;
+SHOW GRANTS FOR 'ershad'@'%';
+SET PASSWORD FOR 'ershad'@'%' = PASSWORD('baru');
+DROP USER 'ershad'@'%';
+SELECT user,host FROM mysql.user;
+
+SELECT DASAR - 80% kerjaan disini:
+SELECT * FROM users;
+SELECT id, name, email FROM users LIMIT 10;
+SELECT * FROM users WHERE id = 1;
+SELECT * FROM users WHERE email LIKE '%@gmail.com';
+SELECT * FROM users WHERE created_at >= '2024-01-01';
+SELECT * FROM users WHERE status IN ('active','pending');
+SELECT * FROM users WHERE name IS NOT NULL AND deleted_at IS NULL;
+SELECT * FROM users ORDER BY created_at DESC LIMIT 10;
+SELECT * FROM users ORDER BY id DESC LIMIT 10 OFFSET 20; -- pagination
+SELECT DISTINCT status FROM users;
+
+WHERE + LIKE + REGEXP:
+SELECT * FROM users WHERE name LIKE 'Ershad%'; -- depan
+SELECT * FROM users WHERE name LIKE '%Mohammad'; -- belakang
+SELECT * FROM users WHERE name LIKE '%shad%'; -- tengah
+SELECT * FROM users WHERE email REGEXP '^[a-z]+@gmail\\.com$';
+
+COUNT, SUM, GROUP:
+SELECT COUNT(*) FROM users;
+SELECT COUNT(*) FROM users WHERE status='active';
+SELECT status, COUNT(*) FROM users GROUP BY status;
+SELECT status, COUNT(*) as total FROM users GROUP BY status HAVING total > 10;
+SELECT DATE(created_at) as tgl, COUNT(*) FROM users GROUP BY tgl ORDER BY tgl DESC;
+SELECT SUM(amount), AVG(amount), MIN(amount), MAX(amount) FROM orders;
+SELECT user_id, SUM(amount) as total FROM orders GROUP BY user_id ORDER BY total DESC LIMIT 10;
+
+JOIN - RELASI:
+-- INNER: yang match di kedua tabel doang
+SELECT u.name, o.amount FROM users u INNER JOIN orders o ON u.id = o.user_id;
+-- LEFT: semua user, order kalau ada kalau gak null
+SELECT u.name, o.amount FROM users u LEFT JOIN orders o ON u.id = o.user_id;
+-- Cari user yang gak pernah order:
+SELECT u.* FROM users u LEFT JOIN orders o ON u.id = o.user_id WHERE o.id IS NULL;
+-- 3 tabel:
+SELECT u.name, o.amount, p.name FROM users u JOIN orders o ON u.id=o.user_id JOIN products p ON o.product_id=p.id WHERE o.status='paid';
+
+UPDATE & DELETE - HATI2 PAKAI WHERE!:
+-- SELALU SELECT dulu sebelum UPDATE/DELETE!
+SELECT * FROM users WHERE id=1;
+UPDATE users SET status='active' WHERE id=1;
+UPDATE users SET status='banned', banned_at=NOW() WHERE email LIKE '%spam%';
+UPDATE users SET login_count = login_count + 1 WHERE id=1;
+-- UPDATE JOIN:
+UPDATE orders o JOIN users u ON o.user_id=u.id SET o.status='paid' WHERE u.status='active' AND o.status='pending';
+
+SELECT * FROM users WHERE status='spam';
+DELETE FROM users WHERE status='spam'; -- hard delete
+-- soft delete (best practice):
+UPDATE users SET deleted_at=NOW() WHERE id=1;
+-- DELETE JOIN:
+DELETE o FROM orders o JOIN users u ON o.user_id=u.id WHERE u.status='banned';
+
+INSERT:
+INSERT INTO users (name,email) VALUES ('Ershad','e@mail.com');
+INSERT INTO users (name,email) VALUES ('A','a@mail.com'), ('B','b@mail.com'); -- bulk
+INSERT INTO users (name,email) SELECT name,email FROM users_old WHERE active=1; -- dari tabel lain
+
+TABLE ALTER (nambah kolom, index):
+ALTER TABLE users ADD COLUMN phone VARCHAR(20) AFTER email;
+ALTER TABLE users ADD COLUMN status ENUM('active','banned') DEFAULT 'active';
+ALTER TABLE users MODIFY COLUMN name VARCHAR(100) NOT NULL;
+ALTER TABLE users DROP COLUMN phone;
+ALTER TABLE users ADD INDEX idx_status (status);
+ALTER TABLE users ADD UNIQUE INDEX uniq_email (email);
+ALTER TABLE users DROP INDEX idx_status;
+CREATE INDEX idx_created ON users (created_at);
+SHOW INDEX FROM users;
+
+DEBUG & PERFORMANCE:
+EXPLAIN SELECT * FROM users WHERE email='a@mail.com'; -> cek pakai index gak
+EXPLAIN ANALYZE SELECT ...; -- MySQL 8+
+SHOW FULL PROCESSLIST; -> lihat query yang lagi jalan / nge-lock
+SHOW PROCESSLIST; SELECT * FROM INFORMATION_SCHEMA.PROCESSLIST WHERE TIME > 10;
+KILL 12345; -- kill query by ID dari processlist
+SHOW ENGINE INNODB STATUS\G -> cek deadlock
+-- slow query:
+SHOW VARIABLES LIKE 'slow_query_log%';
+SET GLOBAL slow_query_log = 'ON';
+SELECT * FROM mysql.slow_log ORDER BY start_time DESC LIMIT 10;
+
+TRANSACTION:
+START TRANSACTION;
+UPDATE users SET balance = balance - 100 WHERE id=1;
+UPDATE users SET balance = balance + 100 WHERE id=2;
+COMMIT; -- atau ROLLBACK kalau salah
+-- cek autocommit:
+SELECT @@autocommit;
+
+BACKUP & RESTORE (via shell, bukan di dalam mysql):
+mysqldump -u ershad -p mydb > backup-$(date +%F).sql
+mysqldump -u ershad -p mydb users orders > backup-tabel.sql
+mysqldump -u ershad -p --no-data mydb > schema.sql -- struktur doang
+mysqldump -u ershad -p --no-create-info mydb > data.sql -- data doang
+mysqldump -u ershad -p mydb | gzip > backup.sql.gz
+gunzip < backup.sql.gz | mysql -u ershad -p mydb
+mysql -u ershad -p mydb < backup.sql
+# docker:
+docker compose exec db mysqldump -u ershad -p mydb | gzip > backup.sql.gz
+gunzip < backup.sql.gz | docker compose exec -T db mysql -u ershad -p mydb
+
+# restore 1 tabel gede cepet:
+mysql -u ershad -p -e "SET FOREIGN_KEY_CHECKS=0;" mydb
+mysql -u ershad -p mydb < backup.sql
+mysql -u ershad -p -e "SET FOREIGN_KEY_CHECKS=1;" mydb
+
+RESEP PROD YANG SERING:
+
+# 1. Cari user duplicate email
+SELECT email, COUNT(*) as c FROM users GROUP BY email HAVING c > 1;
+
+# 2. Cari order 7 hari terakhir + total per user
+SELECT user_id, COUNT(*) as total_order, SUM(amount) as total FROM orders WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) GROUP BY user_id ORDER BY total DESC;
+
+# 3. Hapus session / log lama biar DB gak bengkak
+SELECT COUNT(*) FROM sessions WHERE last_activity < UNIX_TIMESTAMP(DATE_SUB(NOW(), INTERVAL 30 DAY));
+DELETE FROM sessions WHERE last_activity < UNIX_TIMESTAMP(DATE_SUB(NOW(), INTERVAL 30 DAY)) LIMIT 10000;
+
+# 4. Ganti domain di semua data (kayak sed tapi di DB)
+SELECT * FROM posts WHERE content LIKE '%old.com%';
+UPDATE posts SET content = REPLACE(content, 'old.com', 'new.com') WHERE content LIKE '%old.com%';
+
+# 5. Cek size DB & tabel (biar tau yang bengkak)
+SELECT table_schema AS db, ROUND(SUM(data_length+index_length)/1024/1024,2) AS size_mb FROM information_schema.TABLES GROUP BY table_schema ORDER BY size_mb DESC;
+SELECT table_name, ROUND((data_length+index_length)/1024/1024,2) AS size_mb, table_rows FROM information_schema.TABLES WHERE table_schema='mydb' ORDER BY size_mb DESC LIMIT 20;
+
+# 6. Kill semua query yang nge-lock >60 detik
+SELECT CONCAT('KILL ',ID,';') FROM INFORMATION_SCHEMA.PROCESSLIST WHERE TIME > 60 AND COMMAND != 'Sleep';
+
+# 7. Cek charset berantakan (????)
+SHOW VARIABLES LIKE 'char%';
+ALTER DATABASE mydb CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+ALTER TABLE users CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+TIPS ANTI NYESEL:
+- SELECT dulu baru UPDATE/DELETE, jangan langsung UPDATE WHERE
+- Pakai LIMIT di DELETE/UPDATE biar gak nge-lock lama: DELETE ... LIMIT 10000 loop sampai abis
+- Jangan pakai SELECT * di prod kalau tabel 50 kolom, sebut kolomnya
+- Tambah INDEX di kolom yang sering di WHERE/JOIN/ORDER BY, tapi jangan kebanyakan bikin INSERT lambat
+- Pakai TRANSACTION buat transfer balance / stock biar gak setengah jalan
+- Backup sebelum migrasi gede: mysqldump + gzip
+- Di mysql shell, pakai \G buat baca kolom banyak biar vertikal, bukan horizontal

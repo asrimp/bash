@@ -1,0 +1,127 @@
+# file management - ngatur file & folder
+
+NAVIGASI & LIHAT:
+pwd -> dimana saya sekarang
+ls -lah -> -l detail -a hidden -h human readable (hafal ini!)
+ls -lhS -> sort by size terbesar di atas
+ls -lht -> sort by time terbaru di atas
+ls -R -> rekursif semua subfolder
+tree -L 2 -a -h -> tree view 2 level, butuh apt install tree
+cd - -> balik ke folder sebelumnya
+cd ~/dotfiles && pwd
+stat file.txt -> info lengkap inode, permission, waktu
+
+LIHAT ISI FILE (jangan cat file 1GB!):
+cat file.txt -> keluarin semua
+cat -A file.txt -> lihat karakter aneh ^M \r $ (buat debug CRLF)
+less file.txt -> scroll pelan, q quit, / cari, g top, G bottom
+head -n 20 file.txt -> 20 baris pertama
+tail -n 20 file.txt -> 20 baris terakhir
+tail -f /var/log/nginx/error.log -> -f follow live (buat debug)
+tail -F file.log -> -F tetep follow walau file di-rotate
+wc -l file.txt -> hitung baris
+nl file.txt -> kasih nomor baris
+
+BKIN, COPY, PINDAH, HAPUS:
+touch file.txt -> bikin kosong / update waktu
+mkdir -p ~/a/b/c -> -p bikin parent kalau belum ada, gak error kalau udah ada
+cp file.txt file.bak -> copy
+cp -r folder/ folder2/ -> -r rekursif folder
+cp -a folder/ folder2/ -> -a archive, preserve permission, paling aman
+cp -n file.txt backup/ -> -n no overwrite kalau udah ada
+mv file.txt /tmp/ -> pindah / rename
+mv file.txt file-baru.txt
+rm file.txt -> hapus
+rm -i file.txt -> -i tanya dulu
+rm -rf folder/ -> -r rekursif -f paksa, HATI2!
+trash-put file.txt -> lebih aman dari rm, butuh apt install trash-cli
+mkdir -p ~/.local/share/Trash -> trash ada disini
+
+LINK (shortcut Linux):
+ln -s /var/www/app/app.conf /etc/nginx/sites-enabled/ -> symlink (paling sering)
+ln -s ~/dotfiles/.bashrc ~/.bashrc -> dotfiles kamu
+ln target hardlink.txt -> hardlink (file sama inode)
+ls -l -> symlink ada panah l -> /path
+readlink -f file.txt -> lihat symlink arah kemana
+unlink symlink -> hapus symlink doang (bukan targetnya)
+# ln -s tanpa -s = hardlink, beda! symlink itu shortcut, hardlink itu 2 nama 1 file
+
+CARI FILE & ISI (pengganti search Windows):
+find . -name "*.log" -> cari nama
+find . -name "*.tmp" -delete -> cari + langsung hapus
+find . -type f -size +100M -> file >100MB
+find /var/www -type f -mtime -1 -> file diubah 1 hari terakhir
+find . -type f -name "*.php" | xargs grep -l "password" -> cari file yang isinya ada kata
+locate file.txt -> super cepat, pakai database (sudo updatedb dulu)
+fd pattern -> alternatif find modern, cepat (cargo install fd-find)
+grep -r "ershad" ~/cheatsheet/ -> cari isi file rekursif
+grep -Rin "TODO" . -> -R rekursif -i ignore case -n kasih line number
+rg "pattern" -> ripgrep, lebih kenceng dari grep (apt install ripgrep)
+
+UKURAN & DISK (biar gak penuh tiba2):
+df -h -> disk free per partisi
+df -i -> inode free (kadang disk masih ada tapi inode abis gara2 banyak file kecil)
+du -sh * -> size tiap file/folder di sini, -s summary -h human
+du -sh ~/dotfiles ~/cheatsheet | sort -hr -> sort terbesar
+du -ah . | sort -rh | head -n 20 -> 20 file terbesar di folder ini
+ncdu -> interaktif, enak buat cari yang makan disk (apt install ncdu)
+lsblk -f -> lihat partisi & mount point
+sudo du -sh /var/log/* | sort -hr | head
+
+KOMPRES & ARCHIVE:
+tar -czvf app.tar.gz folder/ -> kompres gzip (paling umum)
+tar -xzvf app.tar.gz -> ekstrak
+tar -tzvf app.tar.gz | head -> lihat isi tanpa ekstrak
+tar -czvf app.tar.gz --exclude='node_modules' --exclude='.git' folder/
+zip -r app.zip folder/ -> zip
+unzip app.zip
+unzip -l app.zip -> lihat isi zip
+gzip file.log -> jadi file.log.gz
+gunzip file.log.gz
+zcat file.log.gz | tail -> baca .gz tanpa ekstrak
+7z x file.7z -> butuh p7zip-full
+
+PERMISSION CEPAT (hubungin sama catatan permission):
+chmod +x script.sh && ./script.sh
+chmod 644 file.txt && chmod 755 folder/
+chown -R ershad:www-data /var/www/app
+# cari file 777 ngaco:
+find /var/www -perm 0777 -type f
+
+OPERASI AMAN & CEPET:
+# 1. Backup sebelum edit (kebiasaan senior):
+cp nginx.conf nginx.conf.bak.$(date +%F)
+cp file.txt{,.bak} -> trik brace, jadi file.txt.bak
+
+# 2. Pindahin banyak file log lama ke archive
+mkdir -p /tmp/archive && mv *.log.2024* /tmp/archive/
+
+# 3. Hapus file kosong / file 0 byte
+find . -type f -empty -delete
+find . -type f -size 0 -delete
+
+# 4. Rename massal .txt jadi .md
+for f in *.txt; do mv "$f" "${f%.txt}.md"; done
+# pakai rename kalau ada: rename 's/\.txt$/.md/' *.txt
+
+# 5. Cari file terbesar penyebab disk penuh
+sudo ncdu / --exclude /proc --exclude /sys
+# atau manual:
+sudo du -sh /* 2>/dev/null | sort -hr | head -n 15
+sudo du -sh /var/* 2>/dev/null | sort -hr | head
+
+# 6. Bikin file dummy 1GB buat test
+fallocate -l 1G dummy.img
+truncate -s 500M file2.img
+dd if=/dev/zero of=file.img bs=1M count=100
+
+# 7. Gabung & potong file
+cat file1.txt file2.txt > gabung.txt
+split -l 1000 big.log part_ -> potong per 1000 baris
+
+TIPS ANTI NYESEL:
+- Selalu pakai ls + rm -i kalau ragu, atau pakai trash-put
+- rm -rf / itu udah diblokir modern, tapi rm -rf /* atau rm -rf ~/dotfiles bisa kejadian, biasain pakai tab + cek dulu
+- Jangan cat file log 2GB, pakai less atau tail -f
+- Pakai -p di mkdir biar script gak error kalau folder udah ada
+- find . -name "*.log" -delete itu lebih aman dari rm $(find ...) kalau nama file ada spasi

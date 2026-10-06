@@ -1,0 +1,22 @@
+chmod 755 file      -> rwxr-xr-x (owner full, lain baca+exec)
+chmod 644 file      -> rw-r--r-- (file biasa)
+chmod 600 file      -> rw------- (private, buat ssh key)
+chmod 700 dir       -> rwx------ (folder private)
+
+OCTAL:
+4=r, 2=w, 1=x
+7=4+2+1=rwx, 6=4+2=rw-, 5=4+1=r-x
+
+SIMBOLIK:
+chmod u+x file      -> tambah exec buat user
+chmod g-w file      -> hapus write buat group
+chmod o=r file      -> other cuma r
+chmod a+r file      -> all tambah read
+chmod u=rw,go=r file-> user rw, group+other r
+
+RECURSIVE & SPECIAL BIT:
+chmod -R 755 dir    -> recursive
+chmod +s file       -> setuid (4000) -> jalan sebagai owner
+chmod g+s dir       -> setgid (2000) -> file baru ikut group folder
+chmod +t dir        -> sticky bit (1000) -> cuma owner bisa hapus, contoh /tmp
+

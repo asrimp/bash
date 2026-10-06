@@ -1,0 +1,3 @@
+rclone check ./data gdrive:backup/data -P
+rclone check ./data gdrive:backup/data --one-way
+

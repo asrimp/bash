@@ -1,0 +1,73 @@
+# tcpdump - nguping paket di jaringan, butuh sudo
+
+SYNTAX DASAR:
+sudo tcpdump [opsi] [filter]
+sudo tcpdump -i any -> any = semua interface, paling aman buat awal
+sudo tcpdump -D -> list interface yang ada (eth0, lo, any)
+sudo tcpdump -i eth0 -n -> -n jangan translate IP jadi nama (lebih cepat)
+sudo tcpdump -i eth0 -nn -> jangan translate IP & port
+sudo tcpdump -i eth0 -c 10 -> ambil 10 paket aja terus berhenti
+sudo tcpdump -i eth0 -A -> -A isi paket jadi ASCII (buat lihat HTTP)
+sudo tcpdump -i eth0 -X -> -X isi paket HEX + ASCII
+sudo tcpdump -i eth0 -v -n -> verbose dikit
+
+FILTER PALING SERING (hafalin ini doang cukup):
+host 8.8.8.8 -> IP tertentu
+src host 1.2.3.4 -> sumber dari IP itu
+dst host 1.2.3.4 -> tujuan ke IP itu
+port 80 -> port 80 (src atau dst)
+src port 3000 -> sumber port 3000
+dst port 53 -> tujuan port 53 (buat DNS)
+net 192.168.1.0/24 -> satu subnet
+tcp / udp / icmp -> protokol doang
+portrange 1-100 -> range port
+
+GABUNG FILTER:
+and, or, not,!
+host 1.1.1.1 and port 80
+port 80 or port 443
+not port 22 and not port 5353 -> biar gak berisik SSH & mDNS
+host 8.8.8.8 and \( port 80 or port 443 \)
+
+SIMPAN & BACA ULANG:
+sudo tcpdump -i any -w /tmp/cap.pcap port 80 -> simpan ke file pcap
+tcpdump -r /tmp/cap.pcap -n -> baca file nya
+tcpdump -r /tmp/cap.pcap -A | grep -i "GET\|POST\|Host"
+sudo tcpdump -i any -w /tmp/cap.pcap -c 100 -G 60 -> -G rotate tiap 60 detik
+
+RESEP WAJIB:
+
+# 1. Lihat semua trafik web di laptop
+sudo tcpdump -i any -n port 80 or port 443 -A | grep -E "Host:|GET |POST "
+
+# 2. Debug API localhost:3000 (yang kamu sering pakai)
+sudo tcpdump -i lo -n port 3000 -A -s 0
+# -s 0 = ambil full paket, jangan dipotong
+# -i lo = loopback, buat localhost
+
+# 3. Cek DNS bocor / ngadat
+sudo tcpdump -i any -n port 53
+sudo tcpdump -i any -n port 53 -A | grep -i "ershad\|google"
+
+# 4. Cek koneksi ke server tertentu (misal gdrive / rclone)
+sudo tcpdump -i any -n host 142.250.0.0/16 -c 20
+
+# 5. Nguping ping (icmp)
+sudo tcpdump -i any -n icmp
+
+# 6. Cari password polos (jangan di prod!)
+sudo tcpdump -i any -n port 80 -A -s 0 | grep -i -E "pass|user|token|auth"
+
+# 7. Simpen terus buka di Wireshark Windows
+sudo tcpdump -i any -w /tmp/debug.pcap port 443
+# abis itu download /tmp/debug.pcap, buka pakai Wireshark di Windows
+
+# 8. Hanya header TCP, cek handshake
+sudo tcpdump -i any -n "tcp[tcpflags] & (tcp-syn)!= 0"
+
+TIPS:
+- Selalu pakai -n / -nn di server, kalau gak bakal lambat karena reverse DNS
+- Selalu pakai -s 0 kalau mau lihat isi HTTP/JSON, default tcpdump cuma 68 byte kepotong
+- Pakai -i any kalau bingung interface nya apa, apalagi di WSL/docker
+- Filter not port 22 WAJIB kalau ssh ke server remote, kalau gak kamu bakal lihat paket ssh kamu sendiri infinite loop
+- Kombinasi maut: sudo tcpdump -i any -nn -s 0 -A port 3000 -> lihat API kamu live

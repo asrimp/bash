@@ -1,0 +1,107 @@
+# text manipulation - bedah file pakai PIPE |
+
+KONSEP PIPE | :
+perintah1 | perintah2 -> output perintah1 jadi input perintah2
+perintah1 |& perintah2 -> stdout + stderr ikut dipipe (bash 4+)
+A | tee file.txt -> cabang, tampil di layar + simpan ke file
+A | tee -a file.txt | B -> cabang + lanjut ke B
+A | xargs B -> output A jadi ARGUMEN buat B (beda sama pipe biasa)
+# beda: pipe = jadi stdin, xargs = jadi argumen
+
+POLA PIPE WAJIB HAFAL (copy-paste langsung jadi):
+
+# 1. Cari -> Potong -> Urut -> Hitung -> Urut lagi (pola No.1 di server)
+cat /var/log/nginx/access.log | grep "404" | cut -d'"' -f2 | cut -d' ' -f2 | sort | uniq -c | sort -nr | head
+# artinya: cari 404 | ambil URL | urut | hitung berapa kali muncul | urut paling banyak | 10 teratas
+# versi lebih cepat tanpa cat (useless cat):
+grep "404" /var/log/nginx/access.log | cut -d'"' -f2 | cut -d' ' -f2 | sort | uniq -c | sort -nr | head
+
+# 2. Proses -> Filter -> Ambil kolom -> Aksi
+ps aux | grep nginx | grep -v grep | awk '{print $2}' | xargs kill -9
+ps aux --sort=-%cpu | head -n 20 | grep -v grep
+
+# 3. Log -> Filter error -> Ambil pesan -> Hitung
+journalctl -u nginx --since today | grep -i "error\|failed" | cut -d: -f4- | sort | uniq -c | sort -nr
+
+# 4. File list -> Filter -> Ukuran
+ls -lah /var/log/ | grep ".log" | awk '{print $9, $5}' | sort -k2 -hr
+find . -type f -name "*.log" | xargs du -sh | sort -hr | head -n 20
+
+# 5. Potong kolom + ganti delimiter
+cat /etc/passwd | cut -d: -f1,7 | tr ':' ' ' | column -t | sort
+cat /etc/passwd | awk -F: '{print $1, $7}' | column -t | sort
+
+# 6. Bersihin text pakai pipe bertingkat
+cat file.txt | tr -d '\r' | sed 's/ *$//' | grep -v "^$" | grep -v "^#" | sort -u
+# artinya: hapus \r | hapus spasi akhir | hapus baris kosong | hapus komen | sort unique
+
+# 7. JSON / CSV pipe
+cat data.json | jq -r '.[].email' | sort -u | grep "@gmail.com"
+cat data.csv | cut -d, -f2 | tail -n +2 | sort | uniq -c | sort -nr
+
+# 8. Tee - lihat + simpan + lanjut pipe
+ls -lah /var/www/ | tee /tmp/list.txt | grep "drw" | wc -l
+# keluar di layar + kesimpen di /tmp/list.txt + tetap dilanjut ke grep
+cat big.log | grep "ERROR" | tee /tmp/error.txt | wc -l
+# jadi tau ada berapa ERROR, sekaligus kesimpen filenya
+
+# 9. Pipe 2 input jadi 1 (process substitution, sakti)
+diff <(cat file1.txt | sort) <(cat file2.txt | sort) -> bandingin 2 output pipe tanpa bikin file temp
+paste <(cut -d: -f1 /etc/passwd) <(cut -d: -f7 /etc/passwd) | column -t
+
+CUT, AWK, SED PAKAI PIPE:
+cut -d ":" -f1 /etc/passwd | head
+cat /etc/passwd | cut -d: -f1,3 | tr ':' ' '
+cat /etc/passwd | awk -F: '{print $1 " -> " $7}' | sort
+cat access.log | awk '{print $1}' | sort | uniq -c | sort -nr | head -> top IP
+cat access.log | awk '$9>=400' | awk '{print $7}' | sort | uniq -c | sort -nr
+
+SED PIPE (ganti on-the-fly):
+cat file.txt | sed 's/lama/baru/g' | sed 's/ *$//' | grep -v "^$"
+cat win.txt | sed 's/\r$//' | sed 's|/var/www/old|/var/www/new|g' | tee unix.txt
+history | grep docker | sed 's/.*docker/docker/' | sort -u
+
+SORT & UNIQ PIPE:
+cat file.txt | sort | uniq -c | sort -nr | head -n 10 -> top 10 paling sering
+cat file.txt | sort -u | wc -l -> berapa unique
+ls -1 | sort -R | head -n 5 -> 5 file random
+
+TR, WC, COLUMN PIPE:
+cat file.txt | tr 'a-z' 'A-Z' | head
+cat file.txt | tr -s ' ' | sed 's/^ *//'
+cat file.txt | wc -l | xargs echo "total baris:"
+ls -1 ~/cheatsheet/*.txt | xargs wc -l | sort -n | column -t
+
+RESEP PIPE YANG KAMU PAKAI TIAP HARI DI SERVER:
+
+# 1. Cari IP brute force SSH (pipe 6 tingkat - ini soal interview SRE)
+sudo cat /var/log/auth.log | grep "Failed password" | grep -oE "[0-9]{1,3}(\.[0-9]{1,3}){3}" | sort | uniq -c | sort -nr | head
+
+# 2. Top 10 URL 404 di nginx (biar tau link mati)
+cat /var/log/nginx/access.log | awk '$9==404 {print $7}' | sort | uniq -c | sort -nr | head
+
+# 3. Top 10 IP paling banyak hit (cek DDoS / bot)
+cat /var/log/nginx/access.log | awk '{print $1}' | sort | uniq -c | sort -nr | head | awk '{print $2 " -> " $1 " hits"}'
+
+# 4. Cari file gede + siapa pemiliknya
+find /var -type f -size +100M 2>/dev/null | xargs ls -lh | awk '{print $5, $3, $9}' | sort -hr | head
+
+# 5. Bersihin config nginx dari komen + kosong biar enak dibaca
+cat /etc/nginx/nginx.conf | grep -v "^\s*#" | grep -v "^\s*$" | tee /tmp/clean.conf | head -n 50
+
+# 6. Cek semua timer/systemd yang failed pakai pipe
+systemctl --failed | grep service | awk '{print $1}' | xargs -I{} sh -c 'echo "== {} =="; journalctl -u {} -n 5 --no-pager'
+
+# 7. Cek docker makan disk + container mana paling gede lognya
+docker ps -a --format "{{.Names}} {{.Size}}" | sort -k2 -hr
+find /var/lib/docker/containers/ -name "*-json.log" | xargs du -sh | sort -hr | head
+
+# 8. Ambil list domain dari semua config nginx
+cat /etc/nginx/sites-enabled/* | grep -h "server_name" | awk '{for(i=2;i<=NF;i++) print $i}' | tr ';' ' ' | tr ' ' '\n' | grep -v "^$" | sort -u
+
+TIPS PIPE:
+- Jangan cat | grep, langsung grep file.log (lebih cepat), tapi cat | grep gak apa buat belajar pipe
+- Kalau pipe error: cek pakai set -o pipefail di script, biar error di tengah pipe ketahuan
+- Kalau output pipe aneh ada ^M: tambah | tr -d '\r' atau | sed 's/\r$//'
+- Pakai | less buat output panjang, | head buat test dulu sebelum | xargs rm
+- Pakai | tee biar gak kehilangan output pas debug panjang

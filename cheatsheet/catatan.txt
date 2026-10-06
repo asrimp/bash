@@ -1,0 +1,782 @@
+# git
+git status -s
+git log --oneline --graph
+git diff
+
+# bash
+ctrl+a awal baris
+ctrl+e akhir baris
+ctrl+r search history
+
+# docker
+docker ps
+docker logs -f container# ls
+ls -l          -> list detail (permission, owner, size)
+ls -la         -> termasuk file hidden yang diawali .
+ls -lh         -> human readable size (K, M, G)
+ls -lt         -> urut by time terbaru
+ls -lS         -> urut by size terbesar
+ls -li         -> tampilkan inode number
+ls -lR         -> recursive semua subfolder
+ls -ld /path   -> info folder nya sendiri, bukan isinya
+ls -l --color=auto
+
+FORMAT ls -l:
+-rwxr-xr-- 1 ershad group 1.2K Oct 6 10:00 file.txt
+| | | |  |   |       |
+| | | |  |   |       -> nama
+| | | |  |   -> tanggal
+| | | |  -> size
+| | | -> group
+| | -> owner
+| -> file type: - file, d dir, l symlink, c char, b block
+
+# chmod
+chmod 755 file      -> rwxr-xr-x (owner full, lain baca+exec)
+chmod 644 file      -> rw-r--r-- (file biasa)
+chmod 600 file      -> rw------- (private, buat ssh key)
+chmod 700 dir       -> rwx------ (folder private)
+
+OCTAL:
+4=r, 2=w, 1=x
+7=4+2+1=rwx, 6=4+2=rw-, 5=4+1=r-x
+
+SIMBOLIK:
+chmod u+x file      -> tambah exec buat user
+chmod g-w file      -> hapus write buat group
+chmod o=r file      -> other cuma r
+chmod a+r file      -> all tambah read
+chmod u=rw,go=r file-> user rw, group+other r
+
+RECURSIVE & SPECIAL BIT:
+chmod -R 755 dir    -> recursive
+chmod +s file       -> setuid (4000) -> jalan sebagai owner
+chmod g+s dir       -> setgid (2000) -> file baru ikut group folder
+chmod +t dir        -> sticky bit (1000) -> cuma owner bisa hapus, contoh /tmp
+
+# chown
+chown ershad file              -> ganti owner
+chown ershad:staff file        -> owner + group
+chown :staff file              -> ganti group aja (sama kayak chgrp)
+chown -R ershad:staff dir      -> recursive
+chown --reference=file1 file2  -> samain owner file1
+chown -R --from=olduser:newgroup ershad:staff /home -> ganti yang match aja
+
+chgrp staff file               -> ganti group aja
+chgrp -R staff dir
+
+CEK:
+id              -> lihat user, group kamu
+groups ershad   -> list group user
+
+# acl
+getfacl file               -> lihat ACL lengkap
+getfacl -p file            -> tanpa header comment
+setfacl -m u:budi:rwx file -> kasih user budi rwx
+setfacl -m g:staff:rx file -> kasih group staff rx
+setfacl -m m::rx file      -> set mask max permission
+setfacl -x u:budi file     -> hapus ACL user budi
+setfacl -b file            -> hapus semua ACL extra, balik ke base
+setfacl -R -m u:budi:rwx dir-> recursive
+setfacl -R -b dir
+
+DEFAULT ACL (buat file baru di dalam folder):
+setfacl -d -m u:budi:rwx dir  -> file baru di dir otomatis dapat acl budi
+setfacl -d -m g:staff:rx dir
+getfacl dir                   -> lihat default: di baris default:user: / default:group:
+setfacl -k dir                -> hapus default acl aja
+
+MASK: permission efektif = ACL & mask, kalau gak bisa baca cek mask
+
+# fileops
+touch file                -> bikin file kosong / update timestamp
+touch -t 202401011200 file-> set time manual
+mkdir -p a/b/c            -> bikin folder bertingkat
+cp file1 file2            -> copy
+cp -p file1 file2         -> copy preserv permission+time
+cp -r dir1 dir2           -> copy folder recursive
+cp -a dir1 dir2           -> archive mode = -dR --preserve=all (paling aman)
+mv file1 file2            -> pindah / rename
+rm file                   -> hapus
+rm -r dir                 -> hapus folder
+rm -rf dir                -> force (hati-hati)
+rm -i file                -> konfirmasi dulu
+ln -s /asli /link         -> symlink (shortcut)
+ln /asli /hardlink        -> hardlink (inode sama)
+stat file                 -> info detail inode, permission octal
+file file                 -> tipe file
+du -sh *                  -> size folder/file
+df -h                     -> size disk
+
+ATRIBUT EXTRA (ext4):
+lsattr file               -> lihat atribut immutable dll
+chattr +i file            -> immutable, gak bisa dihapus bahkan root
+chattr -i file            -> lepas immutable
+chattr +a file            -> append only, cuma bisa nambah
+
+CARI BERDASARKAN PERMISSION:
+find . -type f -perm 777
+find . -type f -perm /4000  -> cari setuid
+find . -type d -perm /2000  -> cari setgid
+find . -user ershad
+find . -group staff
+find . -not -user ershad -ls
+
+UMASK:
+umask              -> lihat umask sekarang, ex: 0022
+umask 022          -> file baru 644, folder baru 755
+umask 027          -> file baru 640, folder baru 750 (lebih private)
+rumus: 666 - umask = file, 777 - umask = dir
+# glob
+GLOB = pola file yang di-expand sama bash SEBELUM perintah jalan
+Beda sama regex! glob buat file, regex buat isi file
+
+BASIC:
+* -> semua karakter, kecuali hidden. ex: *.txt
+? -> satu karakter. ex: file?.txt = file1.txt fileA.txt
+[abc] -> satu dari a,b,c. ex: file[12].txt
+[a-z] -> range. ex: [a-z]*.log
+[!abc] atau [^abc] -> bukan a,b,c. ex: [!0-9]* = gak diawali angka
+*.{jpg,png} -> semua jpg dan png (pakai brace)
+
+BRACE EXPANSION (bukan glob, tapi mirip, urutan eksekusi lebih dulu):
+{a,b,c} -> a b c
+file{1..3}.txt -> file1.txt file2.txt file3.txt
+file{a..c}.txt -> filea.txt fileb.txt filec.txt
+{1..10..2} -> 1 3 5 7 9
+a{1,2}b{3,4} -> a1b3 a1b4 a2b3 a2b4
+mkdir -p project/{src,dist,tests}
+touch file{1..100}.log
+
+DOTFILES (hidden):
+* -> gak include file.hidden
+.* -> include hidden tapi juga. dan.. (bahaya rm)
+shopt -s dotglob-> baru * include hidden
+ls -d.* -> list hidden aja, -d biar gak masuk isinya
+
+RECURSIVE ** :
+shopt -s globstar
+** -> semua file & folder recursive
+**/*.txt -> semua.txt di semua subfolder
+**/ -> cuma folder recursive
+ls **/*.log
+
+EXTGLOB (powerful):
+shopt -s extglob
+?(pat) -> 0 atau 1 kali pat
+*(pat) -> 0 atau lebih pat
++(pat) -> 1 atau lebih pat
+@(pat1|pat2) -> salah satu dari pat
+!(pat) -> bukan pat
+
+Contoh extglob:
+ls!(*.tmp) -> semua kecuali.tmp
+ls @(*.jpg|*.png) -> jpg atau png
+ls!(*.bak|*.log)
+rm!(*.sh) -> hapus semua kecuali.sh (hati-hati)
+
+SHOPT PENTING BUAT GLOB:
+shopt -s nullglob -> kalau gak ada yang match, hasil kosong (bukan string "*.txt")
+shopt -s failglob -> kalau gak match, error (aman buat script)
+shopt -s dotglob -> * include hidden
+shopt -s nocaseglob -> * gak peduli besar kecil
+shopt -s globstar -> aktifin **
+shopt -> lihat semua status
+shopt -s extglob nullglob globstar -> biasanya diaktifkan bareng
+
+AMAN vs BAHAYA:
+ls *.txt -> aman cek dulu
+rm *.txt -> hapus semua txt di folder ini
+rm./* -> lebih aman dari rm * kalau ada file namanya -rf
+for f in *.txt; do [[ -e "$f" ]] || continue; echo "$f"; done -> loop aman kalau nullglob off
+echo *.txt -> debug lihat expand jadi apa
+printf "%s\n" *.txt -> debug per baris, aman kalau nama ada spasi
+
+GLOB + QUOTE:
+"*.txt" -> gak di-expand, jadi string "*.txt"
+'*.txt' -> gak di-expand
+*.txt -> di-expand
+"$var"/*.txt -> var gak di-glob, tapi *.txt di-glob
+
+GLOB vs FIND:
+glob cepat buat folder ini, find buat recursive + filter permission/time
+find. -name "*.log" -> mirip **/*.log tapi lebih aman file banyak
+find. -name "*.tmp" -delete
+
+TRIK FILE DENGAN GLOB:
+cp *.txt backup/ -> copy semua txt
+mv *.jpg images/ -> pindah
+ls -l *.{sh,py} -> list sh dan py
+touch {a,b,c}.txt -> bikin a.txt b.txt c.txt
+ls -d */ -> cuma folder
+ls -d */ | wc -l -> hitung jumlah folder
+rm -i *.bak -> hapus dengan konfirmasi per file
+ls -lh [A-Z]* -> file diawali huruf besar
+ls -lh [!a-z]* -> file diawali bukan huruf kecil
+# find
+SINTAKS: find [path] [opsi] [expression]
+Default recursive, kalau path gak ditulis =.
+
+FILTER NAMA:
+find. -name "*.log" -> case sensitive, harus pakai quote "*.log"
+find. -iname "*.JPG" -> case insensitive
+find. -not -name "*.tmp"
+find. -name "*.log" -o -name "*.tmp" -> OR, pakai -o
+find. \( -name "*.log" -o -name "*.tmp" \) -> gabung OR pakai kurung
+find. -path "*/node_modules/*" -prune -o -name "*.js" -print -> skip folder node_modules
+find. -regex ".*\.\(jpg\|png\)$"
+
+FILTER TYPE:
+find. -type f -> file biasa
+find. -type d -> directory
+find. -type l -> symlink
+find. -type f -empty -> file kosong 0 byte
+find. -type d -empty -> folder kosong
+
+FILTER SIZE:
+find. -size +100M -> lebih dari 100 Mega (k=Kilo, M=Mega, G=Giga, c=byte)
+find. -size -1k -> kurang dari 1K
+find. -size 1M -> pas 1M (1024*1024)
+find. -type f -size +500M -exec ls -lh {} \;
+
+FILTER WAKTU:
+find. -mtime -7 -> modified <7 hari lalu ( - = kurang dari)
+find. -mtime +30 -> modified >30 hari lalu ( + = lebih dari)
+find. -mmin -60 -> modified <60 menit lalu
+find. -atime -1 -> accessed <1 hari
+find. -ctime -1 -> permission/owner berubah <1 hari
+find. -newer file.txt -> lebih baru dari file.txt
+find. -daystart -mtime -1 -> dari jam 0:00 hari ini
+
+FILTER OWNER & PERMISSION:
+find. -user ershad
+find. -group staff
+find. -nouser -o -nogroup -> file owner/group hilang (habis hapus user)
+find. -perm 777
+find. -perm /4000 -> ada setuid bit
+find. -perm /2000 -> ada setgid bit
+find. -perm /1000 -> sticky bit
+find. -readable
+find. -writable
+find.! -readable
+
+DEPTH:
+find. -maxdepth 1 -name "*.txt" -> cuma folder ini aja, mirip ls *.txt tapi aman
+find. -mindepth 2 -maxdepth 3 -> cuma kedalaman 2-3
+find. -depth -> proses file dulu baru folder (penting buat delete)
+
+AKSI (yang bikin find sakti):
+find. -name "*.log" -print -> print default
+find. -name "*.log" -ls -> ls -l style
+find. -name "*.tmp" -delete -> HAPUS, selalu taro -delete paling akhir!
+find. -name "*.tmp" -print -delete -> cek dulu baru hapus (aman)
+find. -type f -name "*.bak" -exec rm -i {} \; -> exec per file, \; = akhir
+find. -type f -name "*.bak" -exec rm {} + -> exec gabung banyak file, lebih cepat
+find. -type f -exec chmod 644 {} \; -> ubah permission hasil find
+find. -type f -exec grep -l "ERROR" {} \; -> cari isi file yang ada kata ERROR
+find. -print0 | xargs -0 ls -lh -> aman kalau nama file ada spasi, pakai -print0
+
+CONTOH PRAKTIS:
+# cari file log 7 hari terakhir yang besar
+find. -type f -name "*.log" -mtime -7 -size +10M -ls
+
+# cari file.js tapi skip node_modules dan.git
+find. \( -path "*/node_modules" -o -path "*/.git" \) -prune -o -type f -name "*.js" -print
+
+# ganti permission semua file 644 folder 755 (wajib buat web)
+find. -type f -exec chmod 644 {} \;
+find. -type d -exec chmod 755 {} \;
+
+# cari file yang bisa di-write semua orang (bahaya)
+find. -type f -perm /o+w -ls
+
+# cari file duplikat nama.env di semua subfolder
+find ~ -name ".env" 2>/dev/null
+
+# cari dan pindah
+find. -name "*.jpg" -exec mv {} ~/Pictures/ \;
+
+# cari file kosong dan hapus
+find. -type f -empty -delete
+find. -type d -empty -delete
+
+# cari file paling baru 10
+find. -type f -printf "%T@ %p\n" | sort -n | tail -10
+
+AMAN:
+1. Selalu test pakai -print / -ls dulu sebelum -delete atau -exec rm
+2. Selalu quote pola: -name "*.log" bukan -name *.log (biar di-expand find, bukan bash)
+3. find. -name "*.log" 2>/dev/null -> buang error Permission denied
+4. Kalau hasil mau di-pipe, pakai -print0 | xargs -0 biar aman spasi
+
+GLOB vs FIND:
+ls *.log -> cuma folder ini, di-expand bash
+find. -maxdepth 1 -name "*.log" -> sama tapi gak error kalau gak ada file (glob tanpa nullglob jadi "*.log")
+find. -name "*.log" -> recursive semua subfolder
+# rclone
+CONFIG:
+rclone config -> setup remote baru (gdrive, s3, dropbox, onedrive, dll)
+rclone listremotes -> list remote yang sudah ada, ex: gdrive: s3:
+rclone config show -> lihat config mentah
+rclone about gdrive: -> lihat kuota & usage
+Config file: ~/.config/rclone/rclone.conf (WSL) atau %APPDATA%/rclone/rclone.conf (Windows)
+
+FORMAT REMOTE:
+gdrive: -> root gdrive
+gdrive:backup -> folder backup di gdrive
+gdrive:backup/file.zip -> file spesifik
+./local -> lokal
+
+PERINTAH DASAR (wajib -P biar ada progress):
+rclone ls gdrive:backup -> list file recursive (nama aja)
+rclone lsl gdrive:backup -> list + size + tanggal
+rclone lsd gdrive:backup -> cuma folder
+rclone size gdrive:backup -> total size
+rclone lsjson gdrive:backup | jq -> format json enak buat script
+
+COPY / MOVE / SYNC (beda!):
+rclone copy ./data gdrive:backup/data -P -> copy lokal -> remote, skip yang sudah ada, GAK hapus di tujuan
+rclone copy gdrive:backup/data ./data -P -> kebalikannya remote -> lokal
+rclone move ./data gdrive:backup/data -P -> copy lalu hapus sumber
+rclone sync ./data gdrive:backup/data -P -> BIKIN TUJUAN SAMA PERSIS KAYAK SUMBER, file di tujuan yang gak ada di sumber bakal KEHAPUS! selalu --dry-run dulu
+rclone copyto ./a.txt gdrive:backup/b.txt -> copy 1 file ganti nama
+rclone moveto ./a.txt gdrive:backup/b.txt
+
+CEK SEBELUM EKSEKUSI (WAJIB):
+--dry-run -> simulasi doang, gak beneran copy/hapus
+-n atau --dry-run sama
+-i atau --interactive -> konfirmasi per file
+rclone sync ./data gdrive:backup/data --dry-run -P
+rclone sync ./data gdrive:backup/data --dry-run --log-file=apa-yang-kehapus.log
+
+FILTER (paling penting):
+--include "*.jpg" -> cuma jpg
+--exclude "*.tmp" -> skip tmp
+--include "*.{jpg,png}" -> jpg & png
+--min-size 100M -> cuma >100M
+--max-size 10M -> cuma <10M
+--min-age 7d -> file lebih dari 7 hari
+--max-age 1d -> file 1 hari terakhir
+--filter-from filter.txt -> filter kompleks dari file
+
+Contoh:
+rclone copy . gdrive:backup --include "*.sh" --exclude "*.tmp" -P
+rclone copy . gdrive:backup --filter "- *.log" --filter "+ *" -P
+
+OPSI UMUM:
+-P atau --progress -> progress bar
+-v atau -vv -> verbose
+--log-file=rclone.log --log-level INFO
+--transfers 8 -> paralel upload 8 file (default 4)
+--checkers 16 -> paralel cek 16
+--bwlimit 10M -> limit speed 10 Mega/s
+--update -> skip file yang lebih baru di tujuan
+--ignore-existing -> skip semua yang sudah ada di tujuan
+--checksum -> cek pakai checksum bukan size+time (lebih akurat)
+--size-only -> cek size doang
+--retries 3 --low-level-retries 10
+
+HAPUS:
+rclone delete gdrive:backup/tmp --dry-run -> hapus file di folder (folder tetap ada)
+rclone rmdir gdrive:backup/tmp -> hapus folder kosong
+rclone purge gdrive:backup/tmp -> hapus folder + isinya (bahaya, = rm -rf)
+rclone deletefile gdrive:backup/file.zip
+
+MOUNT (jadi kayak drive lokal, enak di WSL):
+rclone mount gdrive: ~/mnt/gdrive --vfs-cache-mode writes --daemon -P
+rclone mount gdrive: ~/mnt/gdrive --vfs-cache-mode full --daemon --vfs-cache-max-size 10G
+fusermount -u ~/mnt/gdrive -> unmount (linux)
+--daemon -> jalan di background
+--vfs-cache-mode off|minimal|writes|full -> full paling kompatibel tapi makan disk
+--allow-other -> biar user lain bisa akses
+
+BACKUP ENAK:
+# backup harian incremental
+rclone copy ~/notes gdrive:backup/notes-$(date +%Y-%m-%d) -P --exclude "node_modules/**"
+
+# sync dengan backup folder yang kehapus (biar gak hilang permanen)
+rclone sync ./data gdrive:backup/data --backup-dir gdrive:backup/archive/$(date +%Y-%m-%d) -P
+
+# cek beda lokal vs remote
+rclone check ./data gdrive:backup/data -P
+rclone check ./data gdrive:backup/data --one-way
+
+# enkripsi (crypt):
+# buat remote crypt di rclone config -> remote: gdrive:backup-crypt, password
+rclone copy ./rahasia gcrypt: -P
+
+# bisync (sync 2 arah, gdrive <-> lokal):
+rclone bisync ./data gdrive:backup/data --dry-run -P
+rclone bisync ./data gdrive:backup/data -P --resync pertama kali wajib --resync
+
+TIPS WSL:
+rclone config file di Windows dan WSL beda, copy aja conf nya biar sama
+/mnt/c/Users/ershad/AppData/Roaming/rclone/rclone.conf -> ~/.config/rclone/rclone.conf
+mount di WSL2 butuh WinFsp di Windows kalau mau mount drive letter, atau cukup mount ke ~/mnt/
+
+CONTOH NYATA:
+rclone copy . gdrive:dotfiles --exclude ".git/**" --exclude "node_modules/**" -P
+rclone sync ~/Pictures gdrive:Pictures --transfers 8 --checkers 16 -P --dry-run
+rclone mount gdrive: ~/gdrive --vfs-cache-mode writes --daemon && ls ~/gdrive
+# symbol
+STREAM DASAR (3 file descriptor):
+0 = stdin  -> input, default keyboard
+1 = stdout -> output normal, default layar
+2 = stderr -> output error, default layar
+
+REDIRECT (ngatur aliran ke file):
+> file          -> stdout timpa file (1> file)
+>> file         -> stdout append ke file
+< file          -> stdin dari file
+2> file         -> stderr timpa file
+2>> file        -> stderr append
+&> file         -> stdout+stderr timpa file (bash)
+&>> file        -> stdout+stderr append
+> /dev/null     -> buang stdout, layar bersih
+2> /dev/null    -> buang error doang
+&> /dev/null    -> buang semua
+2>&1            -> arahkan stderr ke tempat stdout lagi pergi
+1>&2            -> arahkan stdout ke tempat stderr
+3> file         -> bikin fd 3 custom
+
+Contoh redirect:
+ls /ada /tidakada > out.txt 2> err.txt -> out ke out.txt, error ke err.txt
+ls /ada /tidakada > out.txt 2>&1 -> semua gabung ke out.txt
+ls /ada /tidakada &> semua.txt -> sama, versi pendek
+ls /ada /tidakada > /dev/null -> sembunyiin output normal
+ls /ada /tidakada 2> /dev/null -> sembunyiin error doang
+
+PIPE | (sambungin stdout kiri ke stdin kanan):
+ls | grep txt     -> output ls jadi input grep
+cat file | sort | uniq -c | sort -nr
+ls /ada /tidakada 2>&1 | grep tidakada -> gabung dulu baru pipe error nya
+ps aux | grep nginx | grep -v grep
+echo "a b c" | xargs -n1 -> pecah per kata
+
+PIPE MODERN:
+|& -> pipe stdout+stderr langsung (sama kayak 2>&1 |)
+ls /ada /tidakada |& grep tidakada
+
+PEMISAH PERINTAH:
+;  -> jalan urut, gagal pun lanjut: cd /tmp; ls; cd -
+&& -> AND, lanjut kalau sukses (exit 0): mkdir a && cd a && touch file
+|| -> OR, lanjut kalau gagal: cd mydir || mkdir mydir && cd mydir
+&  -> jalan di background: sleep 10 &
+&& dan || bisa gabung: [ -f file ] && echo ada || echo gak ada
+
+GROUPING:
+(command) -> jalan di subshell, env gak bocor ke luar
+{ command; } -> jalan di shell ini, harus ada spasi dan ; di akhir
+contoh: (cd /tmp && touch a) -> setelah itu kamu masih di folder lama
+        { cd /tmp && touch a; } -> kamu pindah ke /tmp beneran
+
+SUBSTITUSI:
+$(command) -> output command jadi argumen: echo "hari $(date +%A)"
+`command` -> sama kayak $(), tapi jadul, susah nesting
+${var} -> variabel: ${HOME}/file
+$((1+2)) -> hitung aritmatika
+
+HERE DOC & HERE STRING:
+<<EOF -> input banyak baris sampai EOF
+cat > file.txt <<EOF
+baris 1
+baris 2
+# bash
+FITUR BASH LENGKAP (yang gak ada di sh biasa):
+
+1. BUILTIN & PERINTAH DASAR:
+compgen -b -> list semua builtin: echo, cd, alias, type, help, history, jobs, etc
+type ls -> cek apakah alias/builtin/file
+help cd -> help khusus builtin (lebih cepet dari man)
+man bash -> kitab suci 6000 baris
+
+2. EKSPANSI (yang jalan SEBELUM perintah dieksekusi, urutannya penting):
+{a,b,c} -> brace expansion: a b c
+~/ -> tilde expansion: /home/ershad
+$var, ${var:-default} -> parameter expansion
+$(cmd) -> command substitution
+$((1+2)) -> arithmetic expansion
+*? [abc] -> pathname expansion / glob
+echo {1..10} $HOME $(date) *.txt -> semua di-expand sekaligus
+
+3. QUOTING:
+" " -> double quote, variabel expand tapi glob gak
+' ' -> single quote, semua literal
+\ -> escape 1 karakter
+$' ' -> bisa pakai \n \t
+
+4. REDIRECT & PIPE & SYMBOL:
+> >> < 2> &> 2>&1 | |& <<< << <() >() tee
+Ini yang kemarin di # symbol
+
+5. VARIABEL & TIPE DATA:
+var=isi -> tanpa spasi!
+$HOME $PATH $USER $PWD $?
+array: arr=(a b c); echo ${arr[0]}; ${arr[@]}
+assoc: declare -A map; map[key]=val; echo ${map[key]}
+export var -> jadi environment variable buat anak proses
+declare -i num=10 -> integer
+declare -r const=1 -> readonly
+declare -l lower -> auto lowercase
+
+6. KONTROL ALUR:
+if [[ -f file ]]; then echo ada; fi
+[[ ]] -> test modern (lebih aman dari [ ])
+(( )) -> test angka: if (( a > 10 ))
+case $var in a) echo a;; b) echo b;; esac
+for f in *.txt; do echo $f; done
+for ((i=0;i<10;i++)); do echo $i; done
+while read line; do echo $line; done < file
+until false; do...; done
+select opt in a b c; do echo $opt; break; done -> bikin menu
+
+7. FUNGSI & ALIAS & MODULAR:
+alias ll='ls -lh'
+function hi() { echo "hi $1"; }
+hi ershad
+return vs exit, local var di dalam fungsi
+
+8. FITUR INTERAKTIF (kamu baru di sini):
+history -> panah atas/bawah, Ctrl+R reverse search,!123,!!,!$
+readline: Ctrl+A awal baris, Ctrl+E akhir, Ctrl+U hapus, Alt+. argumen terakhir
+shopt -s autocd cdspell direxpand histverify
+complete -F _func cmd -> autocomplete yang kamu bikin
+compgen -W "a b c" -- "$cur"
+COMPREPLY array
+PS1 -> custom prompt warna-warni
+
+9. JOB CONTROL & SINYAL:
+cmd & -> background
+jobs, fg, bg, Ctrl+Z pause, Ctrl+C kill
+wait, disown, nohup cmd &
+trap 'echo kena Ctrl+C' INT -> tangkap sinyal
+trap 'rm /tmp/tmpfile' EXIT -> cleanup pas keluar
+
+10. OPSI & DEBUGGING & KONFIG:
+set -e -> exit kalau error
+set -u -> error kalau variabel belum ada
+set -x -> debug print tiap perintah (paling berguna)
+set -o pipefail -> pipe dianggap gagal kalau salah satu gagal
+shopt -> on/off fitur bash (globstar, extglob, nullglob, dotglob)
+Startup: /etc/profile -> ~/.bash_profile -> ~/.bashrc -> /etc/bash.bashrc
+.bashrc buat interaktif,.bash_profile buat login
+
+11. ADVANCE YANG JARANG DIAJARIN:
+mapfile -t arr < file -> baca file jadi array
+read -p "nama: " name
+coproc -> jalanin 2 proses ngobrol
+[[ $var =~ regex ]] -> regex di bash
+getopts -> parse argumen -a -b value
+enable -n echo -> matiin builtin
+# nano
+BUKA:
+nano file.txt -> buka / bikin baru
+nano -l file.txt -> tampilkan nomor baris
+nano +10 file.txt -> langsung ke baris 10
+nano +10,5 file.txt -> baris 10 kolom 5
+sudo nano /etc/hosts -> edit file root
+
+DASAR HIDUP MATI (wajib hafal 2 ini):
+Ctrl+O -> Save (Write Out), Enter buat konfirmasi
+Ctrl+X -> Keluar, kalau belum save ditanya Y/N
+Ctrl+G -> Help lengkap
+
+NAVIGASI:
+panah -> gerak
+Ctrl+F / Ctrl+B -> maju mundur 1 char (F forward B back)
+Ctrl+P / Ctrl+N -> atas bawah (Prev Next)
+Ctrl+A / Ctrl+E -> awal / akhir baris (kayak bash)
+Ctrl+Y / Ctrl+V -> Page Up / Down
+Alt+\ / Alt+/ -> awal / akhir file
+Ctrl+_ -> Go to line number (Ctrl+Shift+-)
+
+EDIT:
+Backspace / Delete -> hapus
+Ctrl+K -> Cut 1 baris (Kepotong)
+Alt+6 -> Copy 1 baris (gak hapus)
+Ctrl+U -> Paste (Uncut)
+Ctrl+K terus Ctrl+U -> duplicate baris
+Alt+A -> Mark / seleksi, lalu panah buat seleksi, Ctrl+K buat cut seleksi
+Ctrl+J -> Justify / rapihin paragraf
+Tab -> indent (atur di nanorc)
+
+CARI & GANTI:
+Ctrl+W -> Where is / cari, Enter, Alt+W cari lagi selanjutnya
+Ctrl+\ -> Replace, isi yang dicari, Enter, isi ganti
+Alt+R -> Regex mode pas Replace
+Alt+C -> Case sensitive pas cari
+
+UNDO REDO & INFO:
+Alt+U -> Undo
+Alt+E -> Redo (E lagi)
+Ctrl+C -> Info posisi baris, kolom, char
+Alt+D -> hitung kata/baris/char
+
+FILE LAIN & MULTI BUFFER:
+Ctrl+R -> Read / insert file lain ke posisi kursor
+Ctrl+O lalu Ctrl+T -> browser file buat pilih nama save
+Alt+< / Alt+> -> pindah buffer file sebelumnya / selanjutnya (kalau buka banyak file: nano file1 file2)
+Ctrl+O Alt+P -> backup file asli jadi file~
+
+TAMPILAN & OPSI:
+nano -m -> aktifin mouse bisa klik & scroll (enak di WSL)
+nano -B -> auto backup jadi file~
+nano -c -> selalu tampilkan posisi kursor
+nano -i -> auto indent
+nano -A / -S -> smooth scroll
+
+NANORC (config permanen):
+file: ~/.nanorc
+isi yang enak:
+
+set linenumbers
+set tabsize 4
+set tabstospaces
+set autoindent
+set mouse
+set softwrap
+set constantshow
+set historylog
+set positionlog
+set zap # backspace hapus seleksi
+set atblanks
+include "/usr/share/nano/*.nanorc" # syntax highlight semua bahasa
+
+# cek nanorc aktif:
+# nano --rcfile ~/.nanorc file.sh
+
+TIPS WSL:
+kalau Alt+6 gak jalan (bentrok Windows), pakai Esc lalu 6
+atau pakai Ctrl+K lalu Ctrl+U dua kali buat copy
+kalau mouse gak jalan: set mouse di ~/.nanorc
+# mariadb
+INSTALL & SERVICE (Ubuntu/Debian):
+sudo apt install mariadb-server mariadb-client
+sudo systemctl status mariadb
+sudo systemctl start/stop/restart mariadb
+sudo systemctl enable mariadb
+sudo mysql_secure_installation -> set root pass, hapus anonymous, disable remote root
+config: /etc/mysql/mariadb.conf.d/50-server.cnf
+log: /var/log/mysql/error.log
+my.cnf global: /etc/mysql/my.cnf, user: ~/.my.cnf
+
+CONNECT:
+mariadb -u root -p -> login root (mysql masih bisa, symlink)
+mariadb -u ershad -p -> login user
+mariadb -u ershad -p -h 127.0.0.1 -P 3306 -> host port
+mariadb -u ershad -p -e "SHOW DATABASES;" -> eksekusi 1 query tanpa masuk shell
+mycli -u root -p -> client alternatif enak ada autocomplete (pip install mycli)
+
+DALAM SHELL MARIADB (akhiran ; wajib):
+SHOW DATABASES;
+CREATE DATABASE toko CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+DROP DATABASE toko;
+USE toko;
+SHOW TABLES;
+DESCRIBE users; atau SHOW CREATE TABLE users\G
+SHOW TABLE STATUS\G
+
+CRUD DASAR:
+CREATE TABLE users (id INT AUTO_INCREMENT PRIMARY KEY, nama VARCHAR(100), email VARCHAR(100) UNIQUE, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);
+INSERT INTO users (nama,email) VALUES ('ershad','a@b.com');
+SELECT * FROM users;
+SELECT * FROM users WHERE nama LIKE 'ers%';
+SELECT COUNT(*) FROM users;
+UPDATE users SET nama='Ershad M' WHERE id=1;
+DELETE FROM users WHERE id=1;
+TRUNCATE users; -> kosongin cepat
+
+USER & PRIVILEGE:
+CREATE USER 'app'@'localhost' IDENTIFIED BY 'passKuat123';
+CREATE USER 'app'@'%' IDENTIFIED BY 'pass'; -> % = remote
+SHOW GRANTS FOR 'app'@'localhost';
+GRANT ALL PRIVILEGES ON toko.* TO 'app'@'localhost';
+GRANT SELECT,INSERT,UPDATE ON toko.* TO 'app'@'localhost';
+REVOKE DELETE ON toko.* FROM 'app'@'localhost';
+FLUSH PRIVILEGES;
+DROP USER 'app'@'localhost';
+SELECT User,Host FROM mysql.user;
+ALTER USER 'app'@'localhost' IDENTIFIED BY 'passBaru';
+
+BACKUP & RESTORE (paling penting):
+# backup 1 db
+mariadb-dump -u root -p toko > toko.sql
+mysqldump -u root -p toko > toko.sql # nama lama, masih jalan
+
+# backup semua db
+mariadb-dump -u root -p --all-databases > all.sql
+
+# backup cuma struktur
+mariadb-dump -u root -p --no-data toko > struktur.sql
+
+# backup cuma data
+mariadb-dump -u root -p --no-create-info toko > data.sql
+
+# restore
+mariadb -u root -p toko < toko.sql
+mariadb -u root -p < all.sql
+
+# backup otomatis + gzip + tanggal
+mariadb-dump -u root -p toko | gzip > toko-$(date +%F).sql.gz
+
+TOOLS RESMI MARIADB (semua ada --help):
+mariadb -> client shell (dulu mysql)
+mariadb-admin / mysqladmin -> admin server
+  mysqladmin -u root -p ping
+  mysqladmin -u root -p status
+  mysqladmin -u root -p processlist
+  mysqladmin -u root -p variables
+  mysqladmin -u root -p create toko
+  mysqladmin -u root -p drop toko
+
+mariadb-check / mysqlcheck -> cek & repair table
+  mysqlcheck -u root -p --all-databases
+  mysqlcheck -u root -p --auto-repair toko
+  mysqlcheck -u root -p --optimize toko
+
+mariadb-show / mysqlshow -> list db/table cepat tanpa masuk shell
+  mysqlshow -u root -p
+  mysqlshow -u root -p toko
+  mysqlshow -u root -p toko users
+
+mariadb-dump / mysqldump -> backup (di atas)
+mariadb-import / mysqlimport -> import CSV cepat
+  mysqlimport -u root -p --local toko users.csv
+
+mariadb-binlog / mysqlbinlog -> baca binlog buat point-in-time recovery
+  mysqlbinlog /var/log/mysql/mysql-bin.000001 > binlog.sql
+
+mariadb-backup -> pengganti xtrabackup, buat hot backup innodb
+  sudo mariabackup --backup --target-dir=/backup/ --user=root -p
+
+MONITOR & PERFORMANCE:
+SHOW PROCESSLIST; -> lihat query yang jalan
+SHOW FULL PROCESSLIST;
+KILL 123; -> kill query id 123
+SHOW VARIABLES LIKE '%max_connections%';
+SHOW STATUS LIKE 'Threads_connected';
+SHOW ENGINE INNODB STATUS\G
+EXPLAIN SELECT * FROM users WHERE email='a@b.com'; -> cek pakai index atau tidak
+ANALYZE TABLE users;
+OPTIMIZE TABLE users;
+
+IMPORT CSV CEPAT DARI SHELL:
+LOAD DATA INFILE '/tmp/users.csv' INTO TABLE users FIELDS TERMINATED BY ',' ENCLOSED BY '"' LINES TERMINATED BY '\n' IGNORE 1 ROWS;
+
+RESET ROOT PASSWORD KALAU LUPA:
+sudo systemctl stop mariadb
+sudo mysqld_safe --skip-grant-tables --skip-networking &
+mariadb -u root
+FLUSH PRIVILEGES; ALTER USER 'root'@'localhost' IDENTIFIED BY 'baru'; FLUSH PRIVILEGES;
+sudo systemctl start mariadb
+
+TIPS:
+1. Selalu pakai utf8mb4 bukan utf8 biar emoji aman
+2. Jangan pakai root buat aplikasi, bikin user per db
+3. Sebelum DROP/DELETE, SELECT dulu: SELECT * FROM users WHERE id=1; baru DELETE
+4. Buat file ~/.my.cnf biar gak ketik pass terus:
+[client]
+user=root
+password=passKuat
+Tapi chmod 600 ~/.my.cnf
+5..sql hasil dump itu text, bisa grep: grep -n "CREATE TABLE" toko.sql

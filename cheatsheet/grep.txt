@@ -1,0 +1,111 @@
+# grep - cari teks di dalam file / output
+
+DASAR (hafal 5 ini dulu):
+grep "error" file.txt -> cari kata error (case sensitive)
+grep -i "error" file.txt -> -i ignore case, Error = error = ERROR
+grep -n "error" file.txt -> -n kasih nomor baris
+grep -v "error" file.txt -> -v invert, yang GAK ada kata error
+grep -c "error" file.txt -> -c count, hitung berapa baris
+
+CARI REKURSIF DI FOLDER:
+grep -r "password" /var/www/ -> -r rekursif
+grep -Rin "TODO". -> -R follow symlink -i ignore case -n nomor baris (Paling sering dipakai!)
+grep -R "function" --include="*.php" /var/www/ -> cuma file.php
+grep -R "secret" --exclude-dir=node_modules --exclude-dir=.git. -> exclude folder berat
+grep -rl "ershad" ~/cheatsheet/ -> -l cuma nama file yang match, gak usah isi
+grep -rL "license". -> -L file yang GAK ada kata itu
+
+KONTEKS (lihat baris sebelum/sesudah):
+grep -A2 "error" file.txt -> -A 2 baris SESUDAH match
+grep -B2 "error" file.txt -> -B 2 baris SEBELUM
+grep -C3 "error" file.txt -> -C 3 baris sebelum + sesudah (Context)
+grep -C5 "Failed" /var/log/auth.log | tail
+
+WORD & EXACT:
+grep -w "root" /etc/passwd -> -w whole word, "root" doang, gak match "rootless"
+grep -x "root" file.txt -> -x baris persis "root" doang
+grep "^root" /etc/passwd -> ^ awal baris
+grep "bash$" /etc/passwd -> $ akhir baris
+grep "^$" file.txt -> baris kosong
+grep -v "^$" file.txt | grep -v "^#" -> hapus baris kosong + komentar (buat bersih2 config)
+
+REGEX DASAR:
+. -> 1 karakter apapun
+* -> 0 atau lebih dari sebelumnya
+^ awal, $ akhir
+[abc] -> a atau b atau c
+[^abc] -> bukan a b c
+[0-9] -> angka
+grep -E "[0-9]{3}\.[0-9]{3}" file.txt -> -E extended regex, {3} 3x
+# Contoh:
+grep -E "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}" access.log -> cari IP di awal baris
+grep -E "error|failed|fatal" -i app.log -> OR
+
+MODE CEPAT & KHUSUS:
+grep -F "a.b*c" file.txt -> -F fixed string, anggap. * sebagai teks biasa, lebih cepat (fgrep)
+grep -E "error|warn" file.txt -> -E extended regex (egrep)
+grep -P "\d{4}-\d{2}-\d{2}" file.txt -> -P perl regex, bisa \d \w, paling sakti tapi gak semua grep support
+grep --color=always "error" file.txt | less -R -> kasih warna
+grep -o "192\.168\.[0-9.]*" file.log -> -o only matching, cuma keluarin yang match nya doang
+grep -m 5 "error" big.log -> -m stop setelah 5 match pertama (biar cepet)
+
+KOMBO SAMA PIPE (yang kamu pakai tiap hari):
+ps aux | grep nginx -> cari proses
+ps aux | grep -v grep | grep nginx -> buang proses grep nya sendiri
+# lebih bagus pakai pgrep:
+pgrep -a nginx
+journalctl -u nginx | grep -i error
+journalctl -u app-ershad -f | grep --line-buffered -i "error\|exception"
+ss -tulpn | grep 3000
+cat /var/log/nginx/error.log | grep -i "permission\|denied"
+history | grep "docker compose"
+cat ~/.bash_history | grep "kubectl"
+ls -lah | grep "^d" -> cuma folder
+env | grep -i "NODE\|PORT"
+cat /etc/passwd | grep -v "nologin"
+
+CARI & GANTI MASSAL (grep + sed + xargs):
+grep -rl "old-domain.com" /var/www/ -> list file yang kena
+grep -rl "old-domain.com" /var/www/ | xargs sed -i 's/old-domain.com/new-domain.com/g' -> ganti semua
+
+ripgrep (rg) - PENGGANTI GREP 10x LEBIH CEPET:
+# apt install ripgrep
+rg "TODO" -> otomatis ignore.git, node_modules, warna
+rg -i "error" /var/www/
+rg -n "password" --hidden -> termasuk file hidden
+rg -l "api_key". -> cuma nama file
+rg -C3 "panic" --type rust
+rg -F "a.b" -> fixed string
+
+RESEP SERVER YANG WAJIB HAFAL:
+
+# 1. Cari kenapa 500 error di laravel / node
+tail -n 200 /var/www/app/storage/logs/laravel.log | grep -C10 -i "error\|exception\|stack"
+docker logs api --tail 200 | grep -C5 -i "error"
+
+# 2. Cari IP yang brute force SSH
+sudo grep "Failed password" /var/log/auth.log | grep -oE "[0-9]{1,3}(\.[0-9]{1,3}){3}" | sort | uniq -c | sort -nr | head
+
+# 3. Cari file config yang masih ada password default
+grep -Rin "password.*123\|admin.*admin" /var/www/ --include="*.env" --include="*.php"
+
+# 4. Cek nginx config mana yang ada domain tertentu
+grep -R "ershad.my.id" /etc/nginx/
+
+# 5. Bersihin config dari komentar buat dibaca
+grep -v "^#\|^$\|^\s*#" /etc/nginx/nginx.conf
+
+# 6. Cari proses yang makan CPU + filter
+ps aux --sort=-%cpu | grep -v "grep" | head
+
+# 7. Debug systemd yang failed
+systemctl --failed | grep -i "fail"
+journalctl -xe | grep -A5 -B5 "failed"
+
+TIPS:
+- Selalu pakai -n kalau cari di file biar tau baris berapa, langsung bisa nano +n
+- Pakai -i buat log, karena Error, ERROR, error itu sama
+- Kalau grep terasa lambat di folder gede (node_modules), langsung ganti rg
+- grep "teks" file lebih cepat dari cat file | grep "teks" (useless cat)
+- Untuk binary / log campur binary: grep -a "error" file.log (anggap binary sebagai text)
+- Kalau mau highlight tapi tetep keluarin semua: grep --color -E "error|$" file.log

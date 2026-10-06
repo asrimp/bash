@@ -1,0 +1,5 @@
+
+TIPS WSL:
+kalau Alt+6 gak jalan (bentrok Windows), pakai Esc lalu 6
+atau pakai Ctrl+K lalu Ctrl+U dua kali buat copy
+kalau mouse gak jalan: set mouse di ~/.nanorc

@@ -1,0 +1,183 @@
+# docker - contekan lengkap dari 0 sampai prod
+
+CEK DASAR & INFO:
+docker ps -> yang jalan
+docker ps -a -> semua termasuk mati
+docker ps -a --format "{{.Names}} {{.Status}} {{.Ports}}" | column -t -> rapi
+docker images -> list image
+docker images --format "{{.Repository}}:{{.Tag}} {{.Size}}" | sort -k2 -hr
+docker stats --no-stream -> RAM/CPU semua container, --no-stream biar gak live
+docker system df -> makan disk berapa
+docker system df -v -> detail per image/container/volume
+docker info | grep -E "Root|Logging"
+
+RUN - JALANIN CONTAINER (paling sering):
+docker run -d --name api -p 3000:3000 --restart unless-stopped node:20-alpine
+# -d background, --name kasih nama, -p host:container, --restart auto nyala pas reboot
+docker run -d --name api -p 127.0.0.1:3000:3000 -v $(pwd):/app -w /app node:20-alpine npm run dev
+# -p 127.0.0.1:3000:3000 = cuma localhost, gak expose ke public (AMAN buat DB)
+# -v mount folder host ke container, -w working dir
+docker run --rm -it node:20-alpine sh -> --rm hapus pas exit, -it interaktif
+docker run -d --env-file.env --name api --network my-net api-image
+docker run -d --memory="500m" --cpus="0.5" --name api api-image -> limit RAM/CPU biar gak makan server
+
+EXEC, LOG, COPY:
+docker exec -it api bash -> masuk container (alpine pakai sh)
+docker exec -it api sh
+docker exec api ls -la /app -> jalanin 1 perintah doang
+docker exec api env | sort -> cek env di dalam
+docker logs -f api -> -f follow kayak tail -f
+docker logs -f --tail 100 api -> 100 baris terakhir + follow
+docker logs --since 10m api -> 10 menit terakhir
+docker logs -t api -> -t kasih timestamp
+docker cp api:/app/.env./ -> copy dari container ke host
+docker cp./local.conf api:/etc/nginx/conf.d/ -> host ke container
+docker inspect api | jq '.[0].NetworkSettings.Ports' -> cek port mapping detail
+docker inspect api | grep -A5 IPAddress -> IP internal
+
+STOP, HAPUS, BERSIH:
+docker stop api && docker start api && docker restart api
+docker rm -f api -> -f paksa hapus walau jalan
+docker rmi node:20-alpine -> hapus image
+docker rmi $(docker images -q -f "dangling=true") -> hapus dangling <none>
+docker system prune -f -> hapus container mati, network gak kepakai, build cache (AMAN)
+docker system prune -a -f -> + hapus image gak kepakai (HATI2 di prod)
+docker system prune --volumes -f -> + hapus volume (DATA HILANG!)
+docker image prune -a -f
+docker volume prune -f -> hati2 DB bisa hilang
+docker container prune -f
+docker builder prune -f -> hapus build cache biar disk lega
+
+VOLUME & BIND MOUNT:
+docker volume ls
+docker volume create mydata
+docker volume inspect mydata
+docker run -d -v mydata:/data --name db postgres:16 -> named volume, data awet walau container dihapus
+docker run -d -v /home/ershad/app:/app --name api node:20 -> bind mount, edit di host langsung kebaca
+docker run -d -v /home/ershad/app:/app -v /app/node_modules --name api node:20 -> trik: node_modules anon biar gak ketimpa host
+docker run -d --mount type=bind,source="$(pwd)",target=/app,readonly --name api node:20 -> readonly mount
+
+NETWORK:
+docker network ls
+docker network create my-net
+docker network inspect my-net
+docker run -d --network my-net --name api api-image
+docker run -d --network my-net --name db postgres:16 -> sekarang api bisa panggil http://db:5432
+docker network connect my-net api -> connect container yang udah jalan ke network
+docker network disconnect my-net api
+
+DOCKERFILE - BEST PRACTICES:
+# contoh production multi-stage biar image kecil
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY package*.json./
+RUN npm ci
+COPY..
+RUN npm run build
+
+FROM node:20-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=builder /app/node_modules./node_modules
+COPY --from=builder /app/dist./dist
+COPY package*.json./
+USER node
+EXPOSE 3000
+CMD ["node","dist/server.js"]
+
+# build & tag
+docker build -t api:v1.2.3.
+docker build -t api:latest -t api:v1.2.3.
+docker build --no-cache -t api:v1.2.3.
+
+DOCKER COMPOSE (yang kamu pakai harian):
+# docker-compose.yml
+services:
+  api:
+    build:.
+    image: api:v1.2.3
+    ports: ["127.0.0.1:3000:3000"]
+    restart: unless-stopped
+    env_file:.env
+    volumes: [".:/app", "/app/node_modules"]
+    networks: [app-net]
+    depends_on: [db]
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file:.env
+    volumes: [pgdata:/var/lib/postgresql/data]
+    ports: ["127.0.0.1:5432:5432"]
+    networks: [app-net]
+volumes:
+  pgdata:
+networks:
+  app-net:
+
+# perintah compose:
+docker compose up -d -> jalanin
+docker compose up -d --build -> build ulang + jalanin (paling sering)
+docker compose up -d --force-recreate --build api -> recreate 1 service doang
+docker compose ps
+docker compose logs -f
+docker compose logs -f --tail 100 api
+docker compose exec api sh
+docker compose exec api npm run migrate
+docker compose down -> matiin + hapus network
+docker compose down -v -> + hapus volume (DATA HILANG!)
+docker compose pull -> pull image baru dari registry
+docker compose config -> cek compose final setelah gabung env
+
+RESEP PROD KAMU (copy-paste):
+
+# 1. Deploy update 0 downtime
+docker compose pull
+docker compose up -d --build
+docker compose ps
+docker logs -f --tail 50 api
+ss -tulpn | grep 3000
+sudo nginx -t && sudo systemctl reload nginx
+
+# 2. Debug kenapa crash loop
+docker ps -a | grep api
+docker logs --tail 100 api
+docker inspect api | jq '.State'
+docker exec -it api sh
+# cek env kebaca gak:
+docker exec api env | grep -E "PORT|DATABASE"
+
+# 3. Masuk DB postgres di container
+docker compose exec db psql -U ershad -d mydb
+# atau dari host (kalau port di-expose 127.0.0.1:5432)
+psql -h 127.0.0.1 -U ershad -d mydb
+
+# 4. Backup DB container
+docker compose exec db pg_dump -U ershad mydb | gzip > backup-$(date +%F).sql.gz
+# restore:
+gunzip < backup.sql.gz | docker compose exec -T db psql -U ershad mydb
+
+# 5. Bersihin disk penuh gara2 docker
+docker system df
+docker system prune -f
+docker image prune -a -f --filter "until=72h" -> hapus image >3 hari
+sudo du -sh /var/lib/docker/containers/*/*-json.log | sort -hr | head
+# set log rotation biar gak kejadian lagi di /etc/docker/daemon.json:
+# {"log-driver":"json-file","log-opts":{"max-size":"10m","max-file":"3"}}
+
+# 6. Pindah image ke server lain tanpa registry
+docker save api:v1.2.3 | gzip > api-v1.2.3.tar.gz
+scp api-v1.2.3.tar.gz server:/tmp/
+# di server: docker load < api-v1.2.3.tar.gz
+
+# 7. Cek container mana makan RAM gede
+docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}" | sort -k3 -hr
+
+BEST PRACTICES PROD:
+- Selalu --restart unless-stopped, bukan always (unless-stopped hormatin kalau kamu stop manual)
+- Selalu -p 127.0.0.1:3000:3000 buat internal, bukan 0.0.0.0:3000 kecuali emang mau public
+- Jangan pakai latest di prod, pakai v1.2.3 biar bisa rollback
+- 1 container = 1 proses, jangan 1 container ada nginx+app+db
+- Pakai USER node / non-root di Dockerfile, jangan root
+- Pakai.dockerignore: node_modules,.git,.env.local, dist
+- Secret jangan COPY ke image, pakai env_file atau docker secret
+- Healthcheck: HEALTHCHECK --interval=30s CMD curl -f http://localhost:3000/health || exit 1

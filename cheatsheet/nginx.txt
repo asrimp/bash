@@ -1,0 +1,88 @@
+# nginx - web server & reverse proxy
+
+STRUKTUR UBUNTU:
+# /etc/nginx/nginx.conf -> config utama
+# /etc/nginx/sites-available/ -> simpan semua config disini
+# /etc/nginx/sites-enabled/ -> yang aktif (symlink dari available)
+# /var/log/nginx/error.log & access.log
+# /var/www/html = root default
+
+CEK & RELOAD (hafal ini biar gak down):
+sudo nginx -t -> test config, WAJIB sebelum reload
+sudo systemctl reload nginx -> reload tanpa putus koneksi (kalau -t ok)
+sudo systemctl restart nginx -> restart total
+sudo systemctl status nginx
+sudo tail -f /var/log/nginx/error.log -> kalau 502/404
+
+BKIN SITE BARU:
+sudo nano /etc/nginx/sites-available/app.conf
+sudo ln -s /etc/nginx/sites-available/app.conf /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
+sudo rm /etc/nginx/sites-enabled/app.conf && sudo systemctl reload nginx -> hapus site
+
+TEMPLATE 1: STATIC / PHP / WORDPRESS / LARAVEL:
+server {
+  listen 80;
+  server_name ershad.my.id www.ershad.my.id;
+  root /var/www/app/public;
+  index index.php index.html;
+
+  location / {
+    try_files $uri $uri/ /index.php?$query_string;
+  }
+
+  location ~ \.php$ {
+    include snippets/fastcgi-php.conf;
+    fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+  }
+
+  location ~ /\.ht { deny all; }
+  access_log /var/log/nginx/app-access.log;
+  error_log /var/log/nginx/app-error.log;
+}
+
+TEMPLATE 2: REVERSE PROXY KE NODE 3000 (yang kamu pakai):
+server {
+  listen 80;
+  server_name api.ershad.my.id;
+
+  location / {
+    proxy_pass http://127.0.0.1:3000;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection 'upgrade';
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_cache_bypass $http_upgrade;
+  }
+}
+
+TEMPLATE 3: 2 APP DALAM 1 DOMAIN (frontend / backend):
+server {
+  listen 80;
+  server_name ershad.my.id;
+  location / { proxy_pass http://127.0.0.1:3000; }
+  location /api/ { proxy_pass http://127.0.0.1:4000/; }
+}
+
+SSL HTTPS + CERTBOT:
+sudo apt install certbot python3-certbot-nginx -y
+sudo certbot --nginx -d ershad.my.id -d www.ershad.my.id -> auto edit config + auto renew
+sudo certbot renew --dry-run -> test renew
+# config SSL manual: listen 443 ssl; ssl_certificate /etc/letsencrypt/live/.../fullchain.pem;
+
+RESEP DEBUG:
+# 502 Bad Gateway = app kamu mati, bukan nginx
+systemctl status app-ershad
+journalctl -u app-ershad -n 50
+curl -v http://127.0.0.1:3000/ -> cek langsung bypass nginx
+
+# Permission 403 Forbidden
+sudo chown -R ershad:www-data /var/www/app
+sudo find /var/www/app -type d -exec chmod 775 {} \;
+sudo find /var/www/app -type f -exec chmod 664 {} \;
+
+# Cek config mana yang kepakai
+sudo nginx -T | grep -A5 "server_name ershad"

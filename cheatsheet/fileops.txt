@@ -1,0 +1,38 @@
+touch file                -> bikin file kosong / update timestamp
+touch -t 202401011200 file-> set time manual
+mkdir -p a/b/c            -> bikin folder bertingkat
+cp file1 file2            -> copy
+cp -p file1 file2         -> copy preserv permission+time
+cp -r dir1 dir2           -> copy folder recursive
+cp -a dir1 dir2           -> archive mode = -dR --preserve=all (paling aman)
+mv file1 file2            -> pindah / rename
+rm file                   -> hapus
+rm -r dir                 -> hapus folder
+rm -rf dir                -> force (hati-hati)
+rm -i file                -> konfirmasi dulu
+ln -s /asli /link         -> symlink (shortcut)
+ln /asli /hardlink        -> hardlink (inode sama)
+stat file                 -> info detail inode, permission octal
+file file                 -> tipe file
+du -sh *                  -> size folder/file
+df -h                     -> size disk
+
+ATRIBUT EXTRA (ext4):
+lsattr file               -> lihat atribut immutable dll
+chattr +i file            -> immutable, gak bisa dihapus bahkan root
+chattr -i file            -> lepas immutable
+chattr +a file            -> append only, cuma bisa nambah
+
+CARI BERDASARKAN PERMISSION:
+find . -type f -perm 777
+find . -type f -perm /4000  -> cari setuid
+find . -type d -perm /2000  -> cari setgid
+find . -user ershad
+find . -group staff
+find . -not -user ershad -ls
+
+UMASK:
+umask              -> lihat umask sekarang, ex: 0022
+umask 022          -> file baru 644, folder baru 755
+umask 027          -> file baru 640, folder baru 750 (lebih private)
+rumus: 666 - umask = file, 777 - umask = dir

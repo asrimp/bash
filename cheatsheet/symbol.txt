@@ -1,0 +1,62 @@
+STREAM DASAR (3 file descriptor):
+0 = stdin  -> input, default keyboard
+1 = stdout -> output normal, default layar
+2 = stderr -> output error, default layar
+
+REDIRECT (ngatur aliran ke file):
+> file          -> stdout timpa file (1> file)
+>> file         -> stdout append ke file
+< file          -> stdin dari file
+2> file         -> stderr timpa file
+2>> file        -> stderr append
+&> file         -> stdout+stderr timpa file (bash)
+&>> file        -> stdout+stderr append
+> /dev/null     -> buang stdout, layar bersih
+2> /dev/null    -> buang error doang
+&> /dev/null    -> buang semua
+2>&1            -> arahkan stderr ke tempat stdout lagi pergi
+1>&2            -> arahkan stdout ke tempat stderr
+3> file         -> bikin fd 3 custom
+
+Contoh redirect:
+ls /ada /tidakada > out.txt 2> err.txt -> out ke out.txt, error ke err.txt
+ls /ada /tidakada > out.txt 2>&1 -> semua gabung ke out.txt
+ls /ada /tidakada &> semua.txt -> sama, versi pendek
+ls /ada /tidakada > /dev/null -> sembunyiin output normal
+ls /ada /tidakada 2> /dev/null -> sembunyiin error doang
+
+PIPE | (sambungin stdout kiri ke stdin kanan):
+ls | grep txt     -> output ls jadi input grep
+cat file | sort | uniq -c | sort -nr
+ls /ada /tidakada 2>&1 | grep tidakada -> gabung dulu baru pipe error nya
+ps aux | grep nginx | grep -v grep
+echo "a b c" | xargs -n1 -> pecah per kata
+
+PIPE MODERN:
+|& -> pipe stdout+stderr langsung (sama kayak 2>&1 |)
+ls /ada /tidakada |& grep tidakada
+
+PEMISAH PERINTAH:
+;  -> jalan urut, gagal pun lanjut: cd /tmp; ls; cd -
+&& -> AND, lanjut kalau sukses (exit 0): mkdir a && cd a && touch file
+|| -> OR, lanjut kalau gagal: cd mydir || mkdir mydir && cd mydir
+&  -> jalan di background: sleep 10 &
+&& dan || bisa gabung: [ -f file ] && echo ada || echo gak ada
+
+GROUPING:
+(command) -> jalan di subshell, env gak bocor ke luar
+{ command; } -> jalan di shell ini, harus ada spasi dan ; di akhir
+contoh: (cd /tmp && touch a) -> setelah itu kamu masih di folder lama
+        { cd /tmp && touch a; } -> kamu pindah ke /tmp beneran
+
+SUBSTITUSI:
+$(command) -> output command jadi argumen: echo "hari $(date +%A)"
+`command` -> sama kayak $(), tapi jadul, susah nesting
+${var} -> variabel: ${HOME}/file
+$((1+2)) -> hitung aritmatika
+
+HERE DOC & HERE STRING:
+<<EOF -> input banyak baris sampai EOF
+cat > file.txt <<EOF
+baris 1
+baris 2

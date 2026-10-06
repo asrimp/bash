@@ -1,0 +1,2 @@
+rclone sync ./data gdrive:backup/data --backup-dir gdrive:backup/archive/$(date +%Y-%m-%d) -P
+

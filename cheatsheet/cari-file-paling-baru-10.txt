@@ -1,0 +1,12 @@
+find. -type f -printf "%T@ %p\n" | sort -n | tail -10
+
+AMAN:
+1. Selalu test pakai -print / -ls dulu sebelum -delete atau -exec rm
+2. Selalu quote pola: -name "*.log" bukan -name *.log (biar di-expand find, bukan bash)
+3. find. -name "*.log" 2>/dev/null -> buang error Permission denied
+4. Kalau hasil mau di-pipe, pakai -print0 | xargs -0 biar aman spasi
+
+GLOB vs FIND:
+ls *.log -> cuma folder ini, di-expand bash
+find. -maxdepth 1 -name "*.log" -> sama tapi gak error kalau gak ada file (glob tanpa nullglob jadi "*.log")
+find. -name "*.log" -> recursive semua subfolder

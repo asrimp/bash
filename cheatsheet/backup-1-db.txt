@@ -1,0 +1,3 @@
+mariadb-dump -u root -p toko > toko.sql
+mysqldump -u root -p toko > toko.sql # nama lama, masih jalan
+

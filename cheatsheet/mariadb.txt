@@ -1,0 +1,49 @@
+INSTALL & SERVICE (Ubuntu/Debian):
+sudo apt install mariadb-server mariadb-client
+sudo systemctl status mariadb
+sudo systemctl start/stop/restart mariadb
+sudo systemctl enable mariadb
+sudo mysql_secure_installation -> set root pass, hapus anonymous, disable remote root
+config: /etc/mysql/mariadb.conf.d/50-server.cnf
+log: /var/log/mysql/error.log
+my.cnf global: /etc/mysql/my.cnf, user: ~/.my.cnf
+
+CONNECT:
+mariadb -u root -p -> login root (mysql masih bisa, symlink)
+mariadb -u ershad -p -> login user
+mariadb -u ershad -p -h 127.0.0.1 -P 3306 -> host port
+mariadb -u ershad -p -e "SHOW DATABASES;" -> eksekusi 1 query tanpa masuk shell
+mycli -u root -p -> client alternatif enak ada autocomplete (pip install mycli)
+
+DALAM SHELL MARIADB (akhiran ; wajib):
+SHOW DATABASES;
+CREATE DATABASE toko CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+DROP DATABASE toko;
+USE toko;
+SHOW TABLES;
+DESCRIBE users; atau SHOW CREATE TABLE users\G
+SHOW TABLE STATUS\G
+
+CRUD DASAR:
+CREATE TABLE users (id INT AUTO_INCREMENT PRIMARY KEY, nama VARCHAR(100), email VARCHAR(100) UNIQUE, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);
+INSERT INTO users (nama,email) VALUES ('ershad','a@b.com');
+SELECT * FROM users;
+SELECT * FROM users WHERE nama LIKE 'ers%';
+SELECT COUNT(*) FROM users;
+UPDATE users SET nama='Ershad M' WHERE id=1;
+DELETE FROM users WHERE id=1;
+TRUNCATE users; -> kosongin cepat
+
+USER & PRIVILEGE:
+CREATE USER 'app'@'localhost' IDENTIFIED BY 'passKuat123';
+CREATE USER 'app'@'%' IDENTIFIED BY 'pass'; -> % = remote
+SHOW GRANTS FOR 'app'@'localhost';
+GRANT ALL PRIVILEGES ON toko.* TO 'app'@'localhost';
+GRANT SELECT,INSERT,UPDATE ON toko.* TO 'app'@'localhost';
+REVOKE DELETE ON toko.* FROM 'app'@'localhost';
+FLUSH PRIVILEGES;
+DROP USER 'app'@'localhost';
+SELECT User,Host FROM mysql.user;
+ALTER USER 'app'@'localhost' IDENTIFIED BY 'passBaru';
+
+BACKUP & RESTORE (paling penting):

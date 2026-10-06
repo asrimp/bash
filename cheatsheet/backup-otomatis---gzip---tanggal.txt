@@ -1,0 +1,63 @@
+mariadb-dump -u root -p toko | gzip > toko-$(date +%F).sql.gz
+
+TOOLS RESMI MARIADB (semua ada --help):
+mariadb -> client shell (dulu mysql)
+mariadb-admin / mysqladmin -> admin server
+  mysqladmin -u root -p ping
+  mysqladmin -u root -p status
+  mysqladmin -u root -p processlist
+  mysqladmin -u root -p variables
+  mysqladmin -u root -p create toko
+  mysqladmin -u root -p drop toko
+
+mariadb-check / mysqlcheck -> cek & repair table
+  mysqlcheck -u root -p --all-databases
+  mysqlcheck -u root -p --auto-repair toko
+  mysqlcheck -u root -p --optimize toko
+
+mariadb-show / mysqlshow -> list db/table cepat tanpa masuk shell
+  mysqlshow -u root -p
+  mysqlshow -u root -p toko
+  mysqlshow -u root -p toko users
+
+mariadb-dump / mysqldump -> backup (di atas)
+mariadb-import / mysqlimport -> import CSV cepat
+  mysqlimport -u root -p --local toko users.csv
+
+mariadb-binlog / mysqlbinlog -> baca binlog buat point-in-time recovery
+  mysqlbinlog /var/log/mysql/mysql-bin.000001 > binlog.sql
+
+mariadb-backup -> pengganti xtrabackup, buat hot backup innodb
+  sudo mariabackup --backup --target-dir=/backup/ --user=root -p
+
+MONITOR & PERFORMANCE:
+SHOW PROCESSLIST; -> lihat query yang jalan
+SHOW FULL PROCESSLIST;
+KILL 123; -> kill query id 123
+SHOW VARIABLES LIKE '%max_connections%';
+SHOW STATUS LIKE 'Threads_connected';
+SHOW ENGINE INNODB STATUS\G
+EXPLAIN SELECT * FROM users WHERE email='a@b.com'; -> cek pakai index atau tidak
+ANALYZE TABLE users;
+OPTIMIZE TABLE users;
+
+IMPORT CSV CEPAT DARI SHELL:
+LOAD DATA INFILE '/tmp/users.csv' INTO TABLE users FIELDS TERMINATED BY ',' ENCLOSED BY '"' LINES TERMINATED BY '\n' IGNORE 1 ROWS;
+
+RESET ROOT PASSWORD KALAU LUPA:
+sudo systemctl stop mariadb
+sudo mysqld_safe --skip-grant-tables --skip-networking &
+mariadb -u root
+FLUSH PRIVILEGES; ALTER USER 'root'@'localhost' IDENTIFIED BY 'baru'; FLUSH PRIVILEGES;
+sudo systemctl start mariadb
+
+TIPS:
+1. Selalu pakai utf8mb4 bukan utf8 biar emoji aman
+2. Jangan pakai root buat aplikasi, bikin user per db
+3. Sebelum DROP/DELETE, SELECT dulu: SELECT * FROM users WHERE id=1; baru DELETE
+4. Buat file ~/.my.cnf biar gak ketik pass terus:
+[client]
+user=root
+password=passKuat
+Tapi chmod 600 ~/.my.cnf
+5..sql hasil dump itu text, bisa grep: grep -n "CREATE TABLE" toko.sql

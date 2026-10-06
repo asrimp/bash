@@ -1,0 +1,95 @@
+# user management - manajemen user & group Linux
+
+CEK USER SAAT INI:
+whoami -> saya siapa
+id -> uid, gid, group saya
+id ershad -> cek user lain
+groups -> group saya apa aja
+groups ershad
+w -> siapa lagi login sekarang
+who
+last -> history login
+last ershad | head
+
+LIHAT DAFTAR USER & GROUP:
+cat /etc/passwd | cut -d: -f1 -> list user (mentah)
+getent passwd -> list user (yang bener, include LDAP)
+getent passwd ershad
+cat /etc/group | cut -d: -f1
+getent group sudo
+grep ershad /etc/passwd
+grep ershad /etc/group
+
+BKIN & HAPUS USER (Debian/Ubuntu pakai adduser lebih enak):
+sudo adduser ershad -> interaktif, bikin home, password (recommended)
+sudo adduser --disabled-password --gecos "" deploy -> buat user robot/service tanpa password
+sudo useradd -m -s /bin/bash -G sudo,adm ershad -> manual: -m bikin home, -s shell, -G group tambahan
+sudo deluser ershad -> hapus user tapi home masih ada
+sudo deluser --remove-home ershad -> hapus + home nya
+sudo userdel -r ershad -> versi low-level hapus + home
+
+BKIN & HAPUS GROUP:
+sudo addgroup devops
+sudo groupadd devops -> versi low-level
+sudo delgroup devops
+sudo adduser ershad devops -> masukin user ke group
+sudo deluser ershad devops -> keluarin dari group
+sudo usermod -aG docker,devops ershad -> -aG append group (JANGAN LUPA -a, kalau gak group lama kehapus!)
+sudo gpasswd -a ershad docker
+
+GANTI PASSWORD & KUNCI:
+sudo passwd ershad -> ganti password user
+passwd -> ganti password sendiri
+sudo passwd -l ershad -> lock user (gak bisa login password)
+sudo passwd -u ershad -> unlock
+sudo passwd -e ershad -> paksa ganti password pas login berikutnya
+chage -l ershad -> cek kapan password expire
+sudo chage -E 2026-12-31 ershad -> expire tanggal tertentu
+sudo chage -E -1 ershad -> gak pernah expire
+
+GANTI INFO USER:
+sudo usermod -l ershad-baru ershad-lama -> ganti nama login
+sudo usermod -d /home/baru -m ershad -> ganti home dir + pindahin file
+sudo usermod -s /bin/zsh ershad -> ganti shell
+sudo usermod -s /usr/sbin/nologin deploy -> bikin user gak bisa login shell (buat service)
+sudo usermod -aG sudo ershad -> kasih sudo
+
+SUDO & GANTI USER:
+su - ershad -> ganti jadi ershad, - = load env dia
+su - -> jadi root (butuh password root)
+sudo -i -> jadi root pakai password sendiri (recommended)
+sudo -u ershad whoami -> jalanin 1 perintah sebagai user lain
+sudo -u www-data bash -> debug sebagai www-data
+visudo -> edit /etc/sudoers dengan aman (JANGAN edit manual!)
+ershad ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart nginx -> contoh di sudoers, boleh restart nginx tanpa password
+
+OWNERSHIP & PERMISSION (berhubungan sama user):
+chown ershad:devops file.txt -> ganti owner
+chown -R ershad:devops /var/www/app -> rekursif
+chgrp devops file.txt
+chmod 755 file.sh / chmod +x file.sh
+umask 022 -> file baru jadi 644, folder 755 (default aman)
+
+RESEP DI SERVER:
+
+# 1. Bikin user deploy buat CI/CD, gak bisa login password, cuma pakai SSH key
+sudo adduser --disabled-password --gecos "" deploy
+sudo usermod -aG docker,www-data deploy
+sudo mkdir -p /home/deploy/.ssh && cat ~/.ssh/id_rsa.pub | sudo tee /home/deploy/.ssh/authorized_keys
+sudo chown -R deploy:deploy /home/deploy/.ssh && chmod 700 /home/deploy/.ssh && chmod 600 /home/deploy/.ssh/authorized_keys
+
+# 2. Bikin user yang langsung ke-lock setelah kerjaan selesai
+sudo adduser --disabled-password kontraktor
+sudo passwd -e kontraktor
+sudo chage -E $(date -d "+7 days" +%F) kontraktor # auto expire 7 hari
+
+# 3. Cek kenapa user gak bisa sudo
+groups ershad
+getent group sudo
+sudo -l -U ershad -> lihat hak sudo dia apa aja
+
+TIPS:
+- Di Ubuntu/Debian SELALU pakai adduser/deluser/addgroup/delgroup, jangan useradd (useradd gak bikin home default)
+- Ingat mantra: usermod -aG (a = append) kalau lupa -a, semua group tambahan hilang
+- User service (nginx, www-data, mysql) kasih shell /usr/sbin/nologin biar gak bisa di-ssh
+- Jangan pernah edit /etc/passwd manual, pakai usermod/vipw

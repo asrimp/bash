@@ -1,0 +1,77 @@
+CONFIG:
+rclone config -> setup remote baru (gdrive, s3, dropbox, onedrive, dll)
+rclone listremotes -> list remote yang sudah ada, ex: gdrive: s3:
+rclone config show -> lihat config mentah
+rclone about gdrive: -> lihat kuota & usage
+Config file: ~/.config/rclone/rclone.conf (WSL) atau %APPDATA%/rclone/rclone.conf (Windows)
+
+FORMAT REMOTE:
+gdrive: -> root gdrive
+gdrive:backup -> folder backup di gdrive
+gdrive:backup/file.zip -> file spesifik
+./local -> lokal
+
+PERINTAH DASAR (wajib -P biar ada progress):
+rclone ls gdrive:backup -> list file recursive (nama aja)
+rclone lsl gdrive:backup -> list + size + tanggal
+rclone lsd gdrive:backup -> cuma folder
+rclone size gdrive:backup -> total size
+rclone lsjson gdrive:backup | jq -> format json enak buat script
+
+COPY / MOVE / SYNC (beda!):
+rclone copy ./data gdrive:backup/data -P -> copy lokal -> remote, skip yang sudah ada, GAK hapus di tujuan
+rclone copy gdrive:backup/data ./data -P -> kebalikannya remote -> lokal
+rclone move ./data gdrive:backup/data -P -> copy lalu hapus sumber
+rclone sync ./data gdrive:backup/data -P -> BIKIN TUJUAN SAMA PERSIS KAYAK SUMBER, file di tujuan yang gak ada di sumber bakal KEHAPUS! selalu --dry-run dulu
+rclone copyto ./a.txt gdrive:backup/b.txt -> copy 1 file ganti nama
+rclone moveto ./a.txt gdrive:backup/b.txt
+
+CEK SEBELUM EKSEKUSI (WAJIB):
+--dry-run -> simulasi doang, gak beneran copy/hapus
+-n atau --dry-run sama
+-i atau --interactive -> konfirmasi per file
+rclone sync ./data gdrive:backup/data --dry-run -P
+rclone sync ./data gdrive:backup/data --dry-run --log-file=apa-yang-kehapus.log
+
+FILTER (paling penting):
+--include "*.jpg" -> cuma jpg
+--exclude "*.tmp" -> skip tmp
+--include "*.{jpg,png}" -> jpg & png
+--min-size 100M -> cuma >100M
+--max-size 10M -> cuma <10M
+--min-age 7d -> file lebih dari 7 hari
+--max-age 1d -> file 1 hari terakhir
+--filter-from filter.txt -> filter kompleks dari file
+
+Contoh:
+rclone copy . gdrive:backup --include "*.sh" --exclude "*.tmp" -P
+rclone copy . gdrive:backup --filter "- *.log" --filter "+ *" -P
+
+OPSI UMUM:
+-P atau --progress -> progress bar
+-v atau -vv -> verbose
+--log-file=rclone.log --log-level INFO
+--transfers 8 -> paralel upload 8 file (default 4)
+--checkers 16 -> paralel cek 16
+--bwlimit 10M -> limit speed 10 Mega/s
+--update -> skip file yang lebih baru di tujuan
+--ignore-existing -> skip semua yang sudah ada di tujuan
+--checksum -> cek pakai checksum bukan size+time (lebih akurat)
+--size-only -> cek size doang
+--retries 3 --low-level-retries 10
+
+HAPUS:
+rclone delete gdrive:backup/tmp --dry-run -> hapus file di folder (folder tetap ada)
+rclone rmdir gdrive:backup/tmp -> hapus folder kosong
+rclone purge gdrive:backup/tmp -> hapus folder + isinya (bahaya, = rm -rf)
+rclone deletefile gdrive:backup/file.zip
+
+MOUNT (jadi kayak drive lokal, enak di WSL):
+rclone mount gdrive: ~/mnt/gdrive --vfs-cache-mode writes --daemon -P
+rclone mount gdrive: ~/mnt/gdrive --vfs-cache-mode full --daemon --vfs-cache-max-size 10G
+fusermount -u ~/mnt/gdrive -> unmount (linux)
+--daemon -> jalan di background
+--vfs-cache-mode off|minimal|writes|full -> full paling kompatibel tapi makan disk
+--allow-other -> biar user lain bisa akses
+
+BACKUP ENAK:

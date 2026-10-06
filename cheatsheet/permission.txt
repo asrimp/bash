@@ -1,0 +1,94 @@
+# permission - chmod, chown, umask, ACL, bit sakti
+
+BACA ls -l:
+drwxr-xr-x 2 ershad devops 4096 ... folder/
+-rwxr--r-- 1 ershad devops 123 ... file.sh
+# d=dir, rwx=owner, r-x=group, r-x=other
+# - = file, l = symlink
+
+ANGKA chmod (hafalin ini):
+0 = ---  1 = --x  2 = -w-  3 = -wx
+4 = r--  5 = r-x  6 = rw-  7 = rwx
+644 = rw-r--r-- (file default aman)
+755 = rwxr-xr-x (folder & script default)
+600 = rw------- (ssh key, .env)
+700 = rwx------ (folder .ssh)
+777 = rwxrwxrwx (JANGAN PERNAH, kecuali /tmp)
+
+CHMOD SIMBOLIK (lebih aman buat edit 1 bagian):
+chmod +x file.sh -> kasih execute semua
+chmod u+x file.sh -> cuma owner
+chmod g-w file.txt -> cabut write group
+chmod o-rwx token.txt -> cabut semua hak other
+chmod a+r file.txt -> semua boleh baca
+chmod u=rw,go=r file.txt -> set persis: owner rw, group other r (jadi 644)
+chmod -R 755 /var/www/app -> rekursif folder
+chmod -R u+rwX,go+rX,go-w /var/www -> X besar = cuma kasih x kalau udah folder/executable
+
+CHOWN / CHGRP:
+chown ershad file.txt -> ganti owner
+chown ershad:devops file.txt -> owner + group sekaligus
+chown -R ershad:www-data /var/www/app -> rekursif + group www-data (buat laravel/wordpress)
+chgrp devops file.txt -> ganti group doang
+chown --reference=ref.txt target.txt -> samain owner kayak file lain
+
+UMASK (menentukan permission default file baru):
+umask 022 -> file baru 644, folder baru 755 (default Ubuntu, aman)
+umask 027 -> file 640, folder 750 (lebih ketat, group doang bisa baca)
+umask 077 -> file 600, folder 700 (super ketat, cuma owner)
+# cek: umask, set sementara: umask 022, permanen taro di ~/.bashrc
+
+BIT SAKTI SUID, SGID, STICKY:
+ls -l /usr/bin/sudo -> -rwsr-xr-x (s = SUID, jalan sebagai owner root)
+chmod u+s file -> SUID 4xxx, file jalan sebagai owner nya (hati2!)
+chmod g+s folder -> SGID 2xxx, file baru di folder otomatis group nya ikut folder (WAJIB buat folder project bareng)
+find /var/www -type d -exec chmod g+s {} \; -> biar file baru tetep group www-data
+chmod +t /tmp -> sticky bit 1xxx, drwxrwxrwt, cuma owner file yang boleh hapus walau folder 777 (kayak /tmp)
+Angka lengkap: 4755 = SUID+rwxr-xr-x, 2755 = SGID, 1755 = sticky, 7755 = SUID+SGID+sticky
+
+ACL - HAK LEBIH DARI 1 GROUP/USER (kalau chmod gak cukup):
+getfacl file.txt -> lihat ACL
+setfacl -m u:ershad:rw file.txt -> kasih user ershad rw tanpa ganti owner
+setfacl -m g:devops:rwx folder/ -> kasih group devops rwx
+setfacl -m o::r-- file.txt -> set other
+setfacl -R -m g:www-data:rwx /var/www/app -> rekursif
+setfacl -R -m d:g:www-data:rwx /var/www/app -> d: = default, file baru otomatis dapet ACL ini
+setfacl -b file.txt -> hapus semua ACL balik ke chmod biasa
+# di ls -l kalau ada + berarti ada ACL: -rw-r--r--+
+
+ATTR KUNCI (biar gak kehapus walau root):
+lsattr file.txt
+chattr +i file.txt -> immutable, gak bisa dihapus/diubah bahkan sama root (buat .env prod)
+chattr -i file.txt -> buka kunci
+chattr +a file.log -> cuma bisa append, gak bisa hapus isi (buat log)
+
+RESEP DI SERVER:
+
+# 1. Laravel / WordPress permission bener (paling sering salah)
+sudo chown -R ershad:www-data /var/www/app
+sudo find /var/www/app -type d -exec chmod 775 {} \;
+sudo find /var/www/app -type f -exec chmod 664 {} \;
+sudo find /var/www/app -type d -exec chmod g+s {} \;
+sudo chmod 775 /var/www/app/storage /var/www/app/bootstrap/cache
+
+# 2. Folder project bareng tim devops, file baru otomatis group devops
+sudo chgrp devops /opt/project
+sudo chmod 2775 /opt/project
+sudo setfacl -R -m d:g:devops:rwx /opt/project
+
+# 3. .env & id_rsa harus 600 kalau gak SSH ngamuk
+chmod 700 ~/.ssh
+chmod 600 ~/.ssh/id_rsa ~/.ssh/authorized_keys
+chmod 600 /var/www/app/.env
+
+# 4. Cari file permission ngaco 777 di server
+find /var/www -type f -perm 0777 | head
+
+# 5. Benerin file yang ke-lock immutable
+sudo chattr -i /var/www/app/.env && nano /var/www/app/.env
+
+TIPS:
+- JANGAN PERNAH chmod 777 buat benerin "permission denied", itu nutupin masalah bukan benerin. Pakai chown + 775
+- Selalu cek ls -l + getfacl kalau bingung kenapa masih permission denied padahal udah chmod
+- Folder butuh x biar bisa di-cd, file butuh x biar bisa di-run
+- chown dulu, baru chmod, baru ACL

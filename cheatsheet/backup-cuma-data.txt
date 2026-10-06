@@ -1,0 +1,2 @@
+mariadb-dump -u root -p --no-create-info toko > data.sql
+

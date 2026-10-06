@@ -1,0 +1,14 @@
+chown ershad file              -> ganti owner
+chown ershad:staff file        -> owner + group
+chown :staff file              -> ganti group aja (sama kayak chgrp)
+chown -R ershad:staff dir      -> recursive
+chown --reference=file1 file2  -> samain owner file1
+chown -R --from=olduser:newgroup ershad:staff /home -> ganti yang match aja
+
+chgrp staff file               -> ganti group aja
+chgrp -R staff dir
+
+CEK:
+id              -> lihat user, group kamu
+groups ershad   -> list group user
+

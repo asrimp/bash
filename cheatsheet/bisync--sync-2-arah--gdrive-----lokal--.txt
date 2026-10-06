@@ -1,0 +1,12 @@
+rclone bisync ./data gdrive:backup/data --dry-run -P
+rclone bisync ./data gdrive:backup/data -P --resync pertama kali wajib --resync
+
+TIPS WSL:
+rclone config file di Windows dan WSL beda, copy aja conf nya biar sama
+/mnt/c/Users/ershad/AppData/Roaming/rclone/rclone.conf -> ~/.config/rclone/rclone.conf
+mount di WSL2 butuh WinFsp di Windows kalau mau mount drive letter, atau cukup mount ke ~/mnt/
+
+CONTOH NYATA:
+rclone copy . gdrive:dotfiles --exclude ".git/**" --exclude "node_modules/**" -P
+rclone sync ~/Pictures gdrive:Pictures --transfers 8 --checkers 16 -P --dry-run
+rclone mount gdrive: ~/gdrive --vfs-cache-mode writes --daemon && ls ~/gdrive

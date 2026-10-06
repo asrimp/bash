@@ -1,0 +1,2 @@
+mariadb-dump -u root -p --all-databases > all.sql
+

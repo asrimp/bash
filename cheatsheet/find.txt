@@ -1,0 +1,63 @@
+SINTAKS: find [path] [opsi] [expression]
+Default recursive, kalau path gak ditulis =.
+
+FILTER NAMA:
+find. -name "*.log" -> case sensitive, harus pakai quote "*.log"
+find. -iname "*.JPG" -> case insensitive
+find. -not -name "*.tmp"
+find. -name "*.log" -o -name "*.tmp" -> OR, pakai -o
+find. \( -name "*.log" -o -name "*.tmp" \) -> gabung OR pakai kurung
+find. -path "*/node_modules/*" -prune -o -name "*.js" -print -> skip folder node_modules
+find. -regex ".*\.\(jpg\|png\)$"
+
+FILTER TYPE:
+find. -type f -> file biasa
+find. -type d -> directory
+find. -type l -> symlink
+find. -type f -empty -> file kosong 0 byte
+find. -type d -empty -> folder kosong
+
+FILTER SIZE:
+find. -size +100M -> lebih dari 100 Mega (k=Kilo, M=Mega, G=Giga, c=byte)
+find. -size -1k -> kurang dari 1K
+find. -size 1M -> pas 1M (1024*1024)
+find. -type f -size +500M -exec ls -lh {} \;
+
+FILTER WAKTU:
+find. -mtime -7 -> modified <7 hari lalu ( - = kurang dari)
+find. -mtime +30 -> modified >30 hari lalu ( + = lebih dari)
+find. -mmin -60 -> modified <60 menit lalu
+find. -atime -1 -> accessed <1 hari
+find. -ctime -1 -> permission/owner berubah <1 hari
+find. -newer file.txt -> lebih baru dari file.txt
+find. -daystart -mtime -1 -> dari jam 0:00 hari ini
+
+FILTER OWNER & PERMISSION:
+find. -user ershad
+find. -group staff
+find. -nouser -o -nogroup -> file owner/group hilang (habis hapus user)
+find. -perm 777
+find. -perm /4000 -> ada setuid bit
+find. -perm /2000 -> ada setgid bit
+find. -perm /1000 -> sticky bit
+find. -readable
+find. -writable
+find.! -readable
+
+DEPTH:
+find. -maxdepth 1 -name "*.txt" -> cuma folder ini aja, mirip ls *.txt tapi aman
+find. -mindepth 2 -maxdepth 3 -> cuma kedalaman 2-3
+find. -depth -> proses file dulu baru folder (penting buat delete)
+
+AKSI (yang bikin find sakti):
+find. -name "*.log" -print -> print default
+find. -name "*.log" -ls -> ls -l style
+find. -name "*.tmp" -delete -> HAPUS, selalu taro -delete paling akhir!
+find. -name "*.tmp" -print -delete -> cek dulu baru hapus (aman)
+find. -type f -name "*.bak" -exec rm -i {} \; -> exec per file, \; = akhir
+find. -type f -name "*.bak" -exec rm {} + -> exec gabung banyak file, lebih cepat
+find. -type f -exec chmod 644 {} \; -> ubah permission hasil find
+find. -type f -exec grep -l "ERROR" {} \; -> cari isi file yang ada kata ERROR
+find. -print0 | xargs -0 ls -lh -> aman kalau nama file ada spasi, pakai -print0
+
+CONTOH PRAKTIS:

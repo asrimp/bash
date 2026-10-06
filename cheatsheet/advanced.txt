@@ -1,0 +1,151 @@
+# advanced - disk, mount, lsblk, fstab, partisi
+
+LIHAT DISK & PARTISI:
+lsblk -f -> -f filesystem + label + UUID (PALING WAJIB HAFAL)
+lsblk -o NAME,SIZE,FSTYPE,MOUNTPOINT,UUID,MODEL -> custom kolom
+blkid -> UUID & TYPE semua disk (buat fstab)
+blkid /dev/sda1
+df -hT -> -T tipe filesystem (ext4, xfs, overlay)
+df -i -> inode, kalau disk penuh padahal df -h masih sisa biasanya inode abis
+lsblk + df -h -> beda: lsblk lihat partisi yang ada, df lihat yang ke-mount
+findmnt -> lihat semua mount dengan tree, lebih enak dari mount
+findmnt -t ext4,xfs -> filter tipe
+cat /proc/mounts | column -t -> semua mount yang aktif kernel
+mount | column -t | grep -E "sda|nvme"
+sudo fdisk -l -> list semua disk & partisi (butuh root)
+sudo parted -l
+sudo gdisk -l /dev/sda -> buat GPT
+
+MOUNT & UMOUNT DASAR:
+sudo mount /dev/sdb1 /mnt/data -> mount manual sementara
+sudo mount -o ro /dev/sdb1 /mnt/data -> readonly (aman buat recovery)
+sudo mount -o remount,rw / -> remount root yang ke-mount ro gara2 error jadi rw lagi
+sudo umount /mnt/data -> unmount
+sudo umount -l /mnt/data -> -l lazy unmount, kalau device busy
+sudo umount -f /mnt/data -> -f force (buat NFS yang hang)
+# mount iso / image:
+sudo mount -o loop ubuntu.iso /mnt/iso
+sudo mount -t tmpfs -o size=512M tmpfs /mnt/ram -> RAM disk 512MB super cepat
+
+BIND MOUNT (mount folder ke folder lain, sakti):
+sudo mount --bind /home/ershad/app /var/www/app -> /var/www/app isinya sama kayak ~/app
+sudo mount --bind -o ro /home/ershad/app /var/www/app -> bind readonly
+findmnt | grep bind
+sudo umount /var/www/app -> lepas bind nya
+
+FSTAB - BIAR AUTO MOUNT PAS BOOT (kalau salah bisa gak boot!):
+cat /etc/fstab
+# format: UUID=xxx  /mnt/data  ext4  defaults,nofail  0  2
+# blkid buat dapet UUID, JANGAN pakai /dev/sdb1 di fstab prod, pakai UUID!
+# contoh aman:
+UUID=123e4567-e89b-12d3-a456-426614174000 /mnt/data ext4 defaults,nofail,x-systemd.device-timeout=30 0 2
+UUID=xxx none swap sw 0 0
+/mnt/data /var/www/app none bind,nofail 0 0 -> bind mount permanen via fstab
+
+# Cara edit aman biar gak gak bisa boot:
+sudo cp /etc/fstab /etc/fstab.bak.$(date +%F)
+sudo blkid -> copy UUID
+sudo nano /etc/fstab
+sudo findmnt --verify -> cek fstab ada salah ketik gak (Ubuntu 20+)
+sudo mount -a -> test mount semua yang di fstab tanpa reboot
+# kalau pakai nofail, walau disk gak ada server tetep boot, kalau gak pakai nofail server masuk emergency mode!
+
+FORMAT & PARTISI:
+sudo fdisk /dev/sdb -> bikin partisi (m, p, n, d, w, q)
+sudo mkfs.ext4 -L DATA /dev/sdb1 -> format ext4 kasih label DATA
+sudo mkfs.xfs -L DATA /dev/sdb1
+sudo mkfs.vfat -F 32 /dev/sdb1 -> buat USB
+sudo mkswap /dev/sdb2 && sudo swapon /dev/sdb2 -> bikin swap
+sudo swapoff /dev/sdb2
+
+# ext4 vs xfs:
+# ext4: bisa di-shrink, default Ubuntu, enak buat root
+# xfs: gak bisa shrink, tapi lebih kenceng buat file gede, default RHEL
+
+CEK & BENERIN FILESYSTEM:
+sudo fsck -n /dev/sdb1 -> -n cek doang gak benerin
+sudo fsck -y /dev/sdb1 -> benerin auto yes (HARUS unmount dulu!)
+sudo fsck.ext4 -f /dev/sdb1
+sudo xfs_repair /dev/sdb1 -> xfs harus unmount
+tune2fs -l /dev/sda1 | grep -E "Mount count|Last checked" -> cek ext4 health
+dumpe2fs -h /dev/sda1 | head -n 40
+
+DISK PENUH & INODE PENUH:
+df -h
+df -i -> kalau IUse% 100% padahal disk masih sisa, berarti kebanyakan file kecil
+sudo du -sh /* 2>/dev/null | sort -hr | head -n 20 -> cari folder gede di root
+sudo du -sh /var/* 2>/dev/null | sort -hr | head
+sudo ncdu / --exclude /proc --exclude /sys -> interaktif, paling enak
+sudo du -sh /var/log/* | sort -hr | head
+sudo journalctl --disk-usage && sudo journalctl --vacuum-size=500M -> log systemd bisa gede
+docker system df && docker system prune -f -> docker sering jadi penyebab
+find /var/www -type f -name "*.log" -size +100M | xargs ls -lh
+find /tmp -type f -atime +7 -delete -> hapus file tmp gak diakses 7 hari
+
+LVM (kalau server pakai LVM):
+sudo pvs && sudo vgs && sudo lvs -> cek physical, group, logical
+lsblk -f | grep lvm
+sudo lvextend -r -L +10G /dev/mapper/ubuntu--vg-ubuntu--lv -> tambah 10GB + resize filesystem langsung (-r)
+# -r itu kunci, biar gak perlu resize2fs manual
+
+SWAP & RAM DISK:
+free -h
+swapon --show
+cat /proc/swaps
+sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
+# tambah ke fstab: /swapfile none swap sw 0 0
+sudo swapoff /swapfile && sudo rm /swapfile -> hapus swapfile
+
+LOOP DEVICE & IMAGE:
+fallocate -l 5G disk.img
+sudo mkfs.ext4 disk.img
+sudo mount -o loop disk.img /mnt/img
+sudo umount /mnt/img
+# buat ISO:
+dd if=/dev/sdb of=disk.img bs=4M status=progress -> clone disk
+
+TRIM & SSD:
+sudo fstrim -v / -> trim manual (buat SSD)
+systemctl status fstrim.timer -> auto trim mingguan Ubuntu udah aktif?
+
+RESEP PENYELAMAT SERVER:
+
+# 1. Server gak bisa boot gara2 salah fstab
+# di emergency mode:
+mount -o remount,rw /
+nano /etc/fstab -> comment baris yang salah pakai #
+mount -a && reboot
+
+# 2. Disk penuh 100%, gak bisa nulis apapun
+df -h
+sudo du -sh /var/log/* | sort -hr | head
+sudo truncate -s 0 /var/log/nginx/error.log -> kosongin log tanpa hapus file (biar service gak bingung)
+sudo journalctl --vacuum-size=100M
+docker system prune -a -f --filter "until=72h"
+sudo find /tmp -type f -atime +3 -delete
+
+# 3. Mount disk baru 1TB buat /mnt/data permanen + aman gak bikin gagal boot
+sudo fdisk -l | grep -E "sdb|nvme"
+sudo mkfs.ext4 -L DATA /dev/sdb1
+sudo blkid /dev/sdb1 -> copy UUID
+sudo mkdir -p /mnt/data && sudo chown ershad:www-data /mnt/data
+echo 'UUID=xxx /mnt/data ext4 defaults,nofail,x-systemd.device-timeout=30 0 2' | sudo tee -a /etc/fstab
+sudo findmnt --verify && sudo mount -a && df -hT | grep /mnt/data
+
+# 4. Bind mount ~/dotfiles/app ke /var/www/app biar edit lokal langsung live (dev)
+sudo mount --bind /home/ershad/app /var/www/app
+# permanen:
+# /home/ershad/app /var/www/app none bind,nofail 0 0 -> di /etc/fstab
+
+# 5. Cek kesehatan disk mau mati gak
+sudo apt install smartmontools -y
+sudo smartctl -a /dev/sda | grep -E "Reallocated|Pending|SMART overall"
+sudo smartctl -t short /dev/sda -> test pendek
+
+TIPS ANTI MELEDAK:
+- Selalu pakai UUID di fstab, jangan /dev/sdb1, karena nama /dev bisa ganti pas reboot
+- Selalu pakai nofail di fstab buat disk tambahan, kalau gak server gak bisa boot kalau disk copot
+- Selalu findmnt --verify + mount -a setelah edit fstab SEBELUM reboot
+- Jangan fsck disk yang masih mount rw, harus umount atau mount -o remount,ro dulu
+- ext4 bisa shrink, xfs GAK BISA shrink cuma bisa grow
+- df -h itu yang ke-mount, lsblk itu yang ada walau belum mount

@@ -1,0 +1,143 @@
+# systemd - ngatur service di Ubuntu 20/22/24
+
+CEK STATUS SERVICE:
+systemctl status nginx -> status lengkap + 10 log terakhir
+systemctl is-active nginx -> cek jalan apa enggak (buat script)
+systemctl is-enabled nginx
+systemctl list-units --type=service --state=running -> yang lagi jalan
+systemctl list-units --type=service --failed -> yang failed
+systemctl list-unit-files --type=service | grep enabled -> yang auto-start
+
+START STOP RESTART:
+sudo systemctl start nginx
+sudo systemctl stop nginx
+sudo systemctl restart nginx -> stop + start
+sudo systemctl reload nginx -> reload config tanpa putus koneksi (kalau support)
+sudo systemctl reload-or-restart nginx
+sudo systemctl restart --now nginx -> restart + enable sekaligus? salah, pakai enable --now di bawah
+
+ENABLE DISABLE (auto-start pas boot):
+sudo systemctl enable nginx -> auto jalan pas boot
+sudo systemctl enable --now nginx -> enable + langsung start (paling sering dipakai)
+sudo systemctl disable nginx -> gak auto lagi
+sudo systemctl disable --now nginx -> disable + langsung stop
+sudo systemctl mask nginx -> kunci total, gak bisa di-start sama sekali (buat musuhin service bawaan)
+sudo systemctl unmask nginx
+sudo systemctl reenable nginx -> disable + enable lagi (buat refresh symlink)
+
+LOG - JOURNALCTL (pengganti tail /var/log/syslog):
+journalctl -u nginx -> log service nginx doang
+journalctl -u nginx -f -> -f follow live
+journalctl -u nginx --since "10 minutes ago" -> 10 menit terakhir
+journalctl -u nginx --since today -n 100 -> 100 baris hari ini
+journalctl -u nginx -b -> log sejak boot sekarang doang
+journalctl -u nginx -b -1 -> boot sebelumnya
+journalctl -u nginx --no-pager -o cat | grep error -> grep
+journalctl -xeu nginx -> -x info tambahan + error doang
+sudo journalctl --disk-usage -> cek log kegedean gak
+sudo journalctl --vacuum-size=500M -> bersihin log sisain 500MB
+sudo journalctl --vacuum-time=7d -> sisain 7 hari
+
+EDIT & BIKIN SERVICE SENDIRI:
+# lokasi file:
+# /lib/systemd/system/ = bawaan apt (JANGAN EDIT)
+# /etc/systemd/system/ = punya kamu (EDIT DI SINI)
+# /etc/systemd/system/nginx.service.d/override.conf = patch aman
+
+sudo systemctl edit nginx -> bikin override.conf otomatis (recommended)
+sudo systemctl edit --full nginx -> copy full file ke /etc/... buat edit total
+sudo systemctl daemon-reload -> WAJIB tiap abis edit file service!
+sudo systemctl cat nginx -> lihat file final yang kepakai (gabungan + override)
+
+CONTOH SERVICE BUAT APP KAMU (Node, Go, Python, Laravel queue):
+# file: /etc/systemd/system/app-ershad.service
+[Unit]
+Description=App Ershad API
+After=network.target mysql.service
+Wants=network.target
+
+[Service]
+Type=simple
+User=ershad
+Group=www-data
+WorkingDirectory=/home/ershad/app
+ExecStart=/usr/bin/node /home/ershad/app/server.js
+# ExecStart=/home/ershad/app/venv/bin/python app.py
+# ExecStart=/usr/bin/php /home/ershad/app/artisan queue:work
+Restart=always
+RestartSec=3
+Environment=NODE_ENV=production
+Environment=PORT=3000
+EnvironmentFile=/home/ershad/app/.env
+StandardOutput=journal
+StandardError=journal
+# batas biar gak makan RAM semua
+MemoryMax=500M
+CPUQuota=80%
+
+[Install]
+WantedBy=multi-user.target
+
+# abis bikin:
+sudo systemctl daemon-reload
+sudo systemctl enable --now app-ershad
+systemctl status app-ershad
+journalctl -u app-ershad -f
+
+TIMER (pengganti cron yang lebih sakti):
+# file: /etc/systemd/system/backup.service + backup.timer
+# backup.service = kayak service biasa, ExecStart=/home/ershad/backup.sh
+# backup.timer:
+[Unit]
+Description=Backup harian
+
+[Timer]
+OnCalendar=daily
+OnCalendar=02:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+
+# enable:
+sudo systemctl daemon-reload
+sudo systemctl enable --now backup.timer
+systemctl list-timers -> lihat semua timer
+systemctl status backup.timer
+
+RESEP SERVER:
+
+# 1. Restart service yang error + lihat kenapa
+sudo systemctl restart nginx || systemctl status nginx
+journalctl -u nginx -n 50 --no-pager
+
+# 2. Bikin app auto-restart kalau mati (udah ada Restart=always)
+sudo systemctl edit app-ershad
+# tambah di [Service]
+# Restart=always
+# RestartSec=3
+# -> save, daemon-reload, restart
+
+# 3. Ganti user service nginx/apache biar permission 775 kamu jalan
+sudo systemctl edit nginx
+# [Service]
+# User=ershad
+# Group=www-data
+sudo systemctl daemon-reload && sudo systemctl restart nginx
+
+# 4. Service failed terus, reset
+sudo systemctl reset-failed app-ershad
+sudo systemctl daemon-reload
+sudo systemctl start app-ershad
+
+# 5. Cek service apa yang bikin boot lama
+systemd-analyze blame | head -n 20
+systemd-analyze critical-chain
+
+TIPS:
+- Urutan sakti abis edit: daemon-reload -> enable --now / restart -> status -> journalctl -f
+- Selalu pakai enable --now, jangan start doang, nanti pas reboot lupa gak jalan
+- Pakai EnvironmentFile buat.env biar gak tulis password di service file
+- Type=simple buat app biasa, Type=exec lebih aman (nunjukin error kalau ExecStart gagal)
+- Jangan pakai Restart=always buat service yang salah config, nanti loop restart terus, pakai on-failure
+- journalctl -f itu sama kayak tail -f tapi buat semua service

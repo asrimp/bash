@@ -1,0 +1,2 @@
+rclone copy ~/notes gdrive:backup/notes-$(date +%Y-%m-%d) -P --exclude "node_modules/**"
+

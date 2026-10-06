@@ -1,0 +1,65 @@
+# curl - client URL, buat test API & download paling sakti
+
+DASAR:
+curl https://example.com -> GET biasa, output ke terminal
+curl -L https://example.com -> -L follow redirect (penting!)
+curl -I https://example.com -> cuma header (cek status)
+curl -i https://example.com -> header + body
+curl -v https://example.com -> verbose, lihat request/response header
+curl -s https://example.com -> silent, gak ada progress bar
+curl -sS https://example.com -> silent tapi error tetap keluar (paling aman buat script)
+
+DOWNLOAD FILE:
+curl -O https://example.com/file.zip -> -O pakai nama asli dari server
+curl -o /tmp/file.zip https://example.com/file.zip -> -o tentuin nama sendiri
+curl -C - -O https://example.com/file.zip -> lanjutin download yang putus
+curl -# -O https://example.com/file.zip -> progress bar # doang
+
+POST & METHOD:
+curl -X POST https://api.com/users -> ganti method
+curl -X DELETE https://api.com/users/1
+curl -d "nama=ershad&umur=20" https://api.com -> POST form default
+curl -d @data.json -H "Content-Type: application/json" https://api.com -> POST file
+curl --json '{"nama":"ershad"}' https://api.com -> shortcut baru curl 7.82+, auto header json
+
+HEADER & AUTH:
+curl -H "Authorization: Bearer TOKEN123" https://api.com
+curl -H "Content-Type: application/json" -H "Accept: application/json" https://api.com
+curl -u user:pass https://api.com -> Basic Auth
+curl -u user: https://api.com -> minta password interaktif
+curl -A "Mozilla/5.0" https://api.com -> ganti User-Agent
+
+UPLOAD FILE:
+curl -F "file=@/home/ershad/foto.jpg" https://api.com/upload -> multipart/form-data
+curl -F "file=@foto.jpg;type=image/jpeg" https://api.com/upload
+curl -T foto.jpg ftp://ftp.example.com/ -> upload via FTP
+
+OPSI SAKTI BUAT DEBUG:
+curl -w "\nHTTP: %{http_code} Time: %{time_total}s\n" -o /dev/null -s https://example.com
+curl --connect-timeout 5 --max-time 10 https://example.com -> timeout 5 detik connect, 10 detik total
+curl -k https://self-signed.com -> -k skip SSL verify (jangan di prod)
+curl --resolve example.com:443:1.2.3.4 https://example.com -> paksa IP tanpa edit /etc/hosts
+curl -x http://proxy:8080 https://example.com -> pakai proxy
+curl --retry 3 --retry-delay 2 https://example.com -> retry 3x
+
+RESEP YANG SERING KEPAKAI:
+# 1. test API JSON + pretty pakai jq
+curl -s https://api.github.com/users/ershadmohammad | jq
+
+# 2. cek API kamu error berapa
+curl -s -o /dev/null -w "%{http_code}" https://api.com/users
+
+# 3. download + lihat progress dari cheat.sh
+curl -s cheat.sh/curl | head -n 100
+
+# 4. kirim JSON ke localhost (buat dev laravel/node)
+curl -s -X POST http://localhost:3000/api/login --json '{"email":"a@b.com","password":"123"}' | jq
+
+# 5. cek header doang, redirect kemana
+curl -s -I -L https://bit.ly/xxxx | grep -i location
+
+TIPS:
+- Selalu pakai -L kalau download file, banyak link yang redirect
+- Selalu pakai -sS di script biar log gak berisik tapi error kelihatan
+- Kombinasi -s + -w + -o /dev/null buat cek status tanpa download body
+- Kalau mau ganti wget: wget itu simpel, curl itu buat API & header lebih lengkap

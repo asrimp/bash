@@ -1,0 +1,2 @@
+find. -type f -name "*.log" -mtime -7 -size +10M -ls
+

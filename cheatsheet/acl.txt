@@ -1,0 +1,18 @@
+getfacl file               -> lihat ACL lengkap
+getfacl -p file            -> tanpa header comment
+setfacl -m u:budi:rwx file -> kasih user budi rwx
+setfacl -m g:staff:rx file -> kasih group staff rx
+setfacl -m m::rx file      -> set mask max permission
+setfacl -x u:budi file     -> hapus ACL user budi
+setfacl -b file            -> hapus semua ACL extra, balik ke base
+setfacl -R -m u:budi:rwx dir-> recursive
+setfacl -R -b dir
+
+DEFAULT ACL (buat file baru di dalam folder):
+setfacl -d -m u:budi:rwx dir  -> file baru di dir otomatis dapat acl budi
+setfacl -d -m g:staff:rx dir
+getfacl dir                   -> lihat default: di baris default:user: / default:group:
+setfacl -k dir                -> hapus default acl aja
+
+MASK: permission efektif = ACL & mask, kalau gak bisa baca cek mask
+
